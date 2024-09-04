@@ -11,7 +11,7 @@ export class Server {
     private errorCallback   : Function
 
     constructor(opts: Partial<ServiceConfig>, errorCallback?: Function | undefined) {
-        this.mdns = MulticastDNS(opts)
+        this.mdns = MulticastDNS(opts as any)
         this.mdns.setMaxListeners(0)
         this.mdns.on('query', this.respondToQuery.bind(this))
         this.errorCallback = errorCallback ?? function(err: any) { throw err }

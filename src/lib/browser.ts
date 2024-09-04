@@ -2,11 +2,12 @@ import KeyValue                                                     from './KeyV
 import DnsTxt                                                       from './dns-txt'
 import dnsEqual                                                     from './utils/dns-equal'
 import { EventEmitter }                                             from 'events'
-import Service, { ServiceRecord }                                   from './service'
+import { ServiceRecord }                                            from './service'
 import { toString as ServiceToString, toType as ServiceToType }     from './service-types'
 import filterService                                                from './utils/filter-service'
 import filterTxt                                                    from './utils/filter-txt'
 import equalTxt                                                   from './utils/equal-txt'
+import { RemoteInfo } from 'dgram'
 
 const TLD           = '.local'
 const WILDCARD      = '_services._dns-sd._udp' + TLD
@@ -19,13 +20,35 @@ export interface BrowserConfig {
     txt?        : KeyValue
 }
 
-export type BrowserOnUp = (service: Service) => void
+export type BrowserOnUp = (service: DiscoveredService) => void
+
+export interface DiscoveredService {
+    fqdn: string
+    name: string
+    type: string | undefined
+
+    subtypes: string[]
+
+    protocol: 'tcp' | 'udp'| string | null | undefined
+
+    addresses: string[]
+    host: string
+    port: number
+
+    txt: Record<string, string>
+    rawTxt: any | undefined
+
+    referer: RemoteInfo
+
+    ttl: number
+    lastSeen: number
+}
 
 export interface BrowserEvents {
-    up: [service: Service]
-    down: [service: Service]
-    'srv-update': [newService: Service, existingService: Service]
-    'txt-update': [newService: Service, existingService: Service]
+    up: [service: DiscoveredService]
+    down: [service: DiscoveredService]
+    'srv-update': [newService: DiscoveredService, existingService: DiscoveredService]
+    'txt-update': [newService: DiscoveredService, existingService: DiscoveredService]
 }
 
 /**
@@ -49,17 +72,20 @@ export class Browser extends EventEmitter<BrowserEvents> {
     private onresponse  : CallableFunction | undefined  = undefined
     private serviceMap  : KeyValue  = {}
 
-    private txt         : any
+    private txt         : DnsTxt
     private name?       : string
     private txtQuery    : KeyValue | undefined
     private wildcard    : boolean   = false
 
-    private _services    : Service[] = []
+    private _services    : DiscoveredService[] = []
 
     constructor(mdns: any, opts: BrowserConfig | BrowserOnUp | null, onup?: BrowserOnUp) {
         super()
 
-        if (typeof opts === 'function') return new Browser(mdns, null, opts as BrowserOnUp)
+        if (typeof opts === 'function') {
+            onup = opts
+            opts = null
+        }
 
         this.mdns   = mdns
         this.txt    = new DnsTxt(opts !== null && opts.txt != null ? opts.txt : undefined)
@@ -96,7 +122,7 @@ export class Browser extends EventEmitter<BrowserEvents> {
         var nameMap: KeyValue = {}
         if (!this.wildcard) nameMap[this.name] = true
 
-        this.onresponse = (packet: any, rinfo: any) => {
+        this.onresponse = (packet: any, rinfo: RemoteInfo) => {
             if (self.wildcard) {
                 packet.answers.forEach((answer: any) => {
                     if (answer.type !== 'PTR' || answer.name !== self.name || answer.name in nameMap) return
@@ -112,13 +138,12 @@ export class Browser extends EventEmitter<BrowserEvents> {
                 self.goodbyes(name, packet).forEach(self.removeService.bind(self))
 
                 // register all new services
-                var matches = self.buildServicesFor(name, packet, self.txt, rinfo, receiveTime)
+                const matches = self.buildServicesFor(name, packet, rinfo, receiveTime)
                 if (matches.length === 0) return
 
-                matches.forEach((service: Service) => {
+                matches.forEach((service) => {
                     const existingService = self._services.find((s) => dnsEqual(s.fqdn, service.fqdn))
                     if (existingService) {
-                        // @ts-expect-error Types are wrong here
                         existingService.lastSeen = service.lastSeen
                         self.updateServiceSrv(existingService, service)
                         self.updateServiceTxt(existingService, service)
@@ -159,7 +184,6 @@ export class Browser extends EventEmitter<BrowserEvents> {
         this._services = this._services.filter((service) => {
             if (!service.ttl) return true // No expiry
 
-            // @ts-expect-error Types are wrong here
             const expireTime = service.lastSeen + service.ttl * 1000
 
             if (expireTime < currentTime) {
@@ -178,7 +202,7 @@ export class Browser extends EventEmitter<BrowserEvents> {
         return this._services;
     }
 
-    private addService(service: Service) {
+    private addService(service: DiscoveredService) {
         // Test if service allowed by TXT query
         if(filterService(service, this.txtQuery) === false) return
         this._services.push(service)
@@ -186,7 +210,7 @@ export class Browser extends EventEmitter<BrowserEvents> {
         this.emit('up', service)
     }
 
-    private updateServiceSrv(existingService: Service, newService: Service) {
+    private updateServiceSrv(existingService: DiscoveredService, newService: DiscoveredService) {
         // check if any properties derived from SRV are updated
         if (existingService.name !== newService.name 
             || existingService.host !== newService.host 
@@ -201,7 +225,7 @@ export class Browser extends EventEmitter<BrowserEvents> {
         }
     }
 
-    private updateServiceTxt(existingService: Service, service: Service) {
+    private updateServiceTxt(existingService: DiscoveredService, service: DiscoveredService) {
         // check if txt updated
         if (equalTxt(service.txt, existingService?.txt || {})) return
         // if the new service is not allowed by the txt query, remove it
@@ -216,7 +240,7 @@ export class Browser extends EventEmitter<BrowserEvents> {
         this.emit('txt-update', service, existingService);
     }
 
-    private replaceService(service: Service) {
+    private replaceService(service: DiscoveredService) {
         this._services = this._services.map((s) =>{
             if (!dnsEqual(s.fqdn, service.fqdn)) return s
             return service
@@ -261,54 +285,61 @@ export class Browser extends EventEmitter<BrowserEvents> {
     // https://tools.ietf.org/html/rfc6763#section-7.1
     //  Selective Instance Enumeration (Subtypes)
     //
-    private buildServicesFor(name: string, packet: any, txt: KeyValue, referer: any, receiveTime: number) {
-        var records = packet.answers.concat(packet.additionals).filter( (rr: ServiceRecord) => rr.ttl > 0) // ignore goodbye messages
+    private buildServicesFor(name: string, packet: any, referer: RemoteInfo, receiveTime: number): DiscoveredService[] {
+        const records = packet.answers.concat(packet.additionals).filter( (rr: ServiceRecord) => rr.ttl > 0) // ignore goodbye messages
 
         return records
           .filter((rr: ServiceRecord) => rr.type === 'PTR' && dnsEqual(rr.name, name))
           .map((ptr: ServiceRecord) => {
-            const service: KeyValue = {
+            const service: DiscoveredService = {
               addresses: [],
               subtypes: [],
+
+              name: '',
+              fqdn: '',
+              type: undefined,
+
+              protocol: undefined,
+              host: '',
+              port: 0,
+
+              referer,
+
+              txt: {},
+              rawTxt: undefined,
+
               ttl: ptr.ttl,
               lastSeen: receiveTime
             }
 
-            records.filter((rr: ServiceRecord) => {
-                return (rr.type === 'PTR' && dnsEqual(rr.data, ptr.data) && rr.name.includes('._sub'))
-              }).forEach((rr: ServiceRecord) => {
-                const types = ServiceToType(rr.name)
-                service.subtypes.push(types.subtype)
-            })
-
-            records
-              .filter((rr: ServiceRecord) => {
-                return (rr.type === 'SRV' || rr.type === 'TXT') && dnsEqual(rr.name, ptr.data)
-              })
-              .forEach((rr: ServiceRecord) => {
-                if (rr.type === 'SRV') {
-                  var parts = rr.name.split('.')
-                  var name = parts[0]
-                  var types = ServiceToType(parts.slice(1, -1).join('.'))
-                  service.name = name
-                  service.fqdn = rr.name
-                  service.host = rr.data.target
-                  service.referer = referer
-                  service.port = rr.data.port
-                  service.type = types.name
-                  service.protocol = types.protocol
-                } else if (rr.type === 'TXT') {
-                  service.rawTxt = rr.data
-                  service.txt = this.txt.decodeAll(rr.data)
-                }
-              })
+            for (const rr of records) {
+                if ((rr.type === 'PTR' && dnsEqual(rr.data, ptr.data) && rr.name.includes('._sub'))) {
+                    const types = ServiceToType(rr.name)
+                    if (types.subtype) service.subtypes.push(types.subtype)
+                } else if (rr.type === 'SRV' && dnsEqual(rr.name, ptr.data)) {
+                    const parts = rr.name.split('.')
+                    const name = parts[0]
+                    const types = ServiceToType(parts.slice(1, -1).join('.'))
+                    service.name = name
+                    service.fqdn = rr.name
+                    service.host = rr.data.target
+                    service.port = rr.data.port
+                    service.type = types.name
+                    service.protocol = types.protocol
+                  } else if (rr.type === 'TXT' && dnsEqual(rr.name, ptr.data)) {
+                    service.rawTxt = rr.data
+                    service.txt = this.txt.decodeAll(rr.data)
+                  }
+            }
 
             if (!service.name) return
 
-            records
-              .filter((rr: ServiceRecord) => (rr.type === 'A' || rr.type === 'AAAA') && dnsEqual(rr.name, service.host))
-              .forEach((rr: ServiceRecord) => service.addresses.push(rr.data))
-
+            for (const rr of records) {
+                if ((rr.type === 'A' || rr.type === 'AAAA') && dnsEqual(rr.name, service.host)) {
+                    service.addresses.push(rr.data)
+                }
+            }
+            
             return service
           })
           .filter((rr: ServiceRecord) => !!rr)

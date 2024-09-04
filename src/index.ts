@@ -1,7 +1,7 @@
 
 import Registry, { PublishOptions }                                     from './lib/registry'
 import Server                                       from './lib/mdns-server'
-import Browser, { BrowserConfig }                   from './lib/browser'
+import Browser, { BrowserConfig, DiscoveredService }                   from './lib/browser'
 import Service, { ServiceConfig, ServiceReferer }   from './lib/service'
 
 export class Bonjour {
@@ -43,7 +43,7 @@ export class Bonjour {
      * @param onup Callback when up event received
      * @returns
      */
-    public find(opts: BrowserConfig | null = null, onup?: (service: Service) => void): Browser {
+    public find(opts: BrowserConfig | null = null, onup?: (service: DiscoveredService) => void): Browser {
         return new Browser(this.server.mdns, opts, onup)
     }
 
@@ -54,10 +54,10 @@ export class Bonjour {
      * @param callback Callback when device found
      * @returns
      */
-    public findOne(opts: BrowserConfig | null = null, timeout = 10000, callback?: CallableFunction): Browser {
+    public findOne(opts: BrowserConfig | null = null, timeout = 10000, callback?: (service: DiscoveredService | null) => void): Browser {
         const browser: Browser = new Browser(this.server.mdns, opts)
-        var timer: NodeJS.Timeout
-        browser.once('up', (service: Service) => {
+        let timer: NodeJS.Timeout
+        browser.once('up', (service) => {
             if(timer !== undefined) clearTimeout(timer)
             browser.stop()
             if(callback) callback(service)
