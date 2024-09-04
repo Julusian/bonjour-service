@@ -28,8 +28,8 @@ export class DnsTxt {
      * @param buffer 
      * @returns 
      */
-    public decode(buffer: Buffer): KeyValue {
-        var data: KeyValue = {}
+    public decode(buffer: Buffer | string): KeyValue {
+        const data: KeyValue = {}
         // Format buffer to KeyValue
         try {
             let format  : string        = buffer.toString()
@@ -47,12 +47,12 @@ export class DnsTxt {
      * @param buffer 
      * @returns 
      */
-    public decodeAll(buffer: Array<Buffer>) {
+    public decodeAll(buffer: Array<Buffer | string>) {
         return buffer
         .filter(i => i.length > 1)
         .map(i => this.decode(i))
         .reduce((prev, curr) => {
-            var obj         = prev
+            const obj         = prev
             let [key]       = Object.keys(curr)
             let [value]     = Object.values(curr)
             obj[key]        = value
