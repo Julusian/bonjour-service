@@ -80,6 +80,6 @@ export class Bonjour {
 
 }
 
-export { Service, ServiceReferer, ServiceConfig, Browser, BrowserConfig }
+export { Service, ServiceReferer, ServiceConfig, Browser, BrowserConfig, DiscoveredService }
 
 export default Bonjour
