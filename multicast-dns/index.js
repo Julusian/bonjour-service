@@ -130,7 +130,9 @@ module.exports = function (opts) {
     socket.close(cb)
   }
 
+  let failedUpdateCount = 0
   that.update = function () {
+    try {
     var ifaces = opts.interface ? [].concat(opts.interface) : allInterfaces()
     var updated = false
 
@@ -157,6 +159,19 @@ module.exports = function (opts) {
       }
       that.emit('networkInterface')
     }
+
+    failedUpdateCount = 0
+  } catch (e) {
+    failedUpdateCount++
+
+    if (failedUpdateCount > 3) {
+      failedUpdateCount = 0
+      // If we fail more than 3 times in a row, emit an error
+      that.emit('error', new Error('Multiple failures updating multicast interface: ' + e.message))
+    } else {
+      that.emit('warning', e)
+    }
+  }
   }
 
   return that
