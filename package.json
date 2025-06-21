@@ -1,6 +1,6 @@
 {
   "name": "@julusian/bonjour-service",
-  "version": "1.3.0-2",
+  "version": "1.4.0",
   "description": "A Bonjour/Zeroconf implementation in TypeScript",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -52,6 +52,8 @@
   "homepage": "https://github.com/julusian/bonjour-service",
   "files": [
     "/dist",
-    "/types"
-  ]
+    "/types",
+    "/multicast-dns"
+  ],
+  "packageManager": "yarn@1.22.22+sha256.c17d3797fb9a9115bf375e31bfd30058cac6bc9c3b8807a3d8cb2094794b51ca"
 }
