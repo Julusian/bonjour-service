@@ -1,33 +1,30 @@
 # bonjour-service
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/onlxltd/bonjour-service/publish-release.yml?style=flat-square) ![npm bundle size](https://img.shields.io/bundlephobia/min/bonjour-service?style=flat-square) ![GitHub Release Date](https://img.shields.io/github/release-date/onlxltd/bonjour-service?style=flat-square) ![npm](https://img.shields.io/npm/dw/bonjour-service?color=%23888&style=flat-square) ![GitHub](https://img.shields.io/github/license/onlxltd/bonjour-service?style=flat-square) [![DeepScan grade](https://deepscan.io/api/teams/13435/projects/16430/branches/352351/badge/grade.svg?style=flat-square)](https://deepscan.io/dashboard#view=project&tid=13435&pid=16430&bid=352351)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/julusian/bonjour-service/publish-release.yml?style=flat-square) ![npm bundle size](https://img.shields.io/bundlephobia/min/@julusian/bonjour-service?style=flat-square) ![GitHub Release Date](https://img.shields.io/github/release-date/julusian/bonjour-service?style=flat-square) ![npm](https://img.shields.io/npm/dw/@julusian/bonjour-service?color=%23888&style=flat-square) ![GitHub](https://img.shields.io/github/license/julusian/bonjour-service?style=flat-square) 
 
 A Bonjour/Zeroconf protocol implementation in TypeScript. Publish
 services on the local network or discover existing services using
 multicast DNS.
 
-This is a rewrite of the project Bonjour (https://github.com/watson/bonjour) into modern TypeScript.
-
-bonjour-service is supported by [ON LX Limited](https://onlx.ltd/?src=bonjour-service). Check out our projects such as [Ctrl Suite](https://onlx.ltd/ctrl-suite?src=bonjour-service) and [Ctrl for iPad](https://onlx.ltd/ctrl-for-ipad?src=bonjour-service).
-
-
+This is a temporary (aka permanent) fork of (https://github.com/onlxltd/bonjour-service) due to some limitations of the original that made it unsuitable for prolonged use.
+That project is a rewrite of the project Bonjour (https://github.com/watson/bonjour) into modern TypeScript.
 
 ## Installation
 Add to your project dependencies using Yarn or NPM.
 
 #### Install with Yarn
 ```
-yarn add bonjour-service
+yarn add @julusian/bonjour-service
 ```
 #### Install with NPM
 ```
-npm install bonjour-service
+npm install @julusian/bonjour-service
 ```
 
 ## Usage
 
 ```js
-import Bonjour from 'bonjour-service'
+import { Bonjour } from '@julusian/bonjour-service'
 
 const instance = new Bonjour()
 
