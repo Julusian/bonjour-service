@@ -1,5 +1,5 @@
 import { ServiceConfig, ServiceRecord }     from './service'
-import MulticastDNS                         from 'multicast-dns'
+import MulticastDNS                         from '../../multicast-dns'
 import KeyValue                             from './KeyValue'
 import deepEqual                            from 'fast-deep-equal/es6'
 import dnsEqual                             from './utils/dns-equal'

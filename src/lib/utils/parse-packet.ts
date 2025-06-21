@@ -1,4 +1,4 @@
-import type { ResponsePacket } from "multicast-dns";
+import type { ResponsePacket } from "../../../multicast-dns";
 import type { DiscoveredService } from "../browser";
 import type { RemoteInfo } from "dgram";
 import dnsEqual from "./dns-equal";

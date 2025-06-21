@@ -137,8 +137,6 @@ export class Browser extends EventEmitter<BrowserEvents> {
                 // unregister all services shutting down
                 self.goodbyes(name, packet).forEach(self.removeService.bind(self))
 
-                console.log('packet', JSON.stringify(packet))
-
                 // register all new services
                 const matches = parsePacketToServices(self.txt, name, packet, rinfo, receiveTime)
                 if (matches.length === 0) return
