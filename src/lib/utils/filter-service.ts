@@ -7,15 +7,15 @@ import { DiscoveredService } from '../browser'
  */
 export default (service: DiscoveredService, txtQuery: KeyValue | undefined): boolean => {
     if(txtQuery === undefined) return true
-    let serviceTxt = service.txt
-    let query = Object.entries(txtQuery)
-        .map(([key, value]) => {
-            let queryValue = serviceTxt[key]
-            if(queryValue === undefined) return false
-            if(value != queryValue) return false
-            return true
-        })
-    if(query.length == 0) return true
-    if(query.includes(false)) return false
+
+    const queryEntries = Object.entries(txtQuery)
+    if (queryEntries.length === 0) return true
+
+
+    for (const [key, value] of queryEntries) {
+        const queryValue = service.txt[key]
+        if (queryValue === undefined || value != queryValue) return false
+    }
+
     return true
 }
