@@ -145,6 +145,21 @@ export class Browser extends EventEmitter<BrowserEvents> {
                     const existingService = self._services.find((s) => dnsEqual(s.fqdn, service.fqdn))
                     if (existingService) {
                         existingService.lastSeen = service.lastSeen
+
+                        // A single response packet rarely repeats every record. Carry
+                        // forward the fields this packet didn't include so a partial
+                        // announcement doesn't clobber data we already have (and emit
+                        // spurious updates). `rawTxt === undefined` means "no TXT record
+                        // in this packet", as opposed to a TXT record that is present
+                        // but empty - so a genuine TXT clear is still detected.
+                        if (service.rawTxt === undefined) {
+                            service.txt = existingService.txt
+                            service.rawTxt = existingService.rawTxt
+                        }
+                        if (service.addresses.length === 0) {
+                            service.addresses = existingService.addresses
+                        }
+
                         self.updateServiceSrv(existingService, service)
                         self.updateServiceTxt(existingService, service)
                         return
@@ -211,17 +226,29 @@ export class Browser extends EventEmitter<BrowserEvents> {
 
     private updateServiceSrv(existingService: DiscoveredService, newService: DiscoveredService) {
         // check if any properties derived from SRV are updated
-        if (existingService.name !== newService.name 
-            || existingService.host !== newService.host 
+        if (existingService.name !== newService.name
+            || existingService.host !== newService.host
             || existingService.port !== newService.port
             || existingService.type !== newService.type
             || existingService.protocol !== newService.protocol
+            // Addresses are derived from A/AAAA records and may arrive in a
+            // later packet than the initial PTR/SRV. Address-less packets are
+            // carried forward before we get here, so any difference now is a
+            // real change consumers should learn about.
+            || !this.addressesEqual(existingService.addresses, newService.addresses)
         ){
             // replace service
             this.replaceService(newService)
 
             this.emit('srv-update', newService, existingService);
         }
+    }
+
+    private addressesEqual(a: string[], b: string[]): boolean {
+        if (a.length !== b.length) return false
+        const sortedA = [...a].sort()
+        const sortedB = [...b].sort()
+        return sortedA.every((value, index) => value === sortedB[index])
     }
 
     private updateServiceTxt(existingService: DiscoveredService, service: DiscoveredService) {
