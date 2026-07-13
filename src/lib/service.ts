@@ -3,12 +3,37 @@
  */
 
 import os                               from 'os'
+import { randomBytes }                  from 'crypto'
 import DnsTxt                           from './dns-txt'
 import KeyValue                         from './KeyValue'
 import { EventEmitter }                 from 'events'
 import { toString as ServiceToString }  from './service-types'
 
 const TLD: string = '.local'
+
+/**
+ * Build a unique, library-owned host label for the A/AAAA records.
+ *
+ * We deliberately do NOT reuse the bare OS hostname: the operating system's own
+ * mDNS responder (e.g. macOS mDNSResponder, Avahi) owns and defends `<hostname>.local`
+ * as a unique record. Announcing A/AAAA records for that exact name from our own socket
+ * makes the OS think a second host is claiming its name, which on macOS surfaces as the
+ * "another computer on the network is using the name ..." dialog.
+ *
+ * Instead we derive a distinct label from the hostname plus a short random suffix, e.g.
+ * `my-mac-a3f9.local`. This never matches the name the OS defends, and the random suffix
+ * keeps it unique across devices and restarts.
+ */
+function defaultHost(): string {
+    let base = os.hostname()
+        .replace(/\.local$/i, '')       // macOS sometimes returns `<name>.local`
+        .replace(/[^A-Za-z0-9-]/g, '-') // keep to a valid DNS label
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+    if (!base) base = 'bonjour'
+    const suffix = randomBytes(2).toString('hex')
+    return `${base}-${suffix}${TLD}`
+}
 
 export interface ServiceConfig {
     name        : string
@@ -78,7 +103,7 @@ export class Service extends EventEmitter {
         this.protocol       = config.protocol || 'tcp'
         this.type           = ServiceToString({ name: config.type, protocol: this.protocol })
         this.port           = config.port
-        this.host           = config.host || os.hostname()
+        this.host           = config.host || defaultHost()
         this.fqdn           = `${this.name}.${this.type}${TLD}`
         this.txt            = config.txt
         this.ttl            = config.ttl

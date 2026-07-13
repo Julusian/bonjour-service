@@ -61,7 +61,7 @@ Publishes a new service.
 Options are:
 
 - `name` (string)
-- `host` (string, optional) - defaults to local hostname
+- `host` (string, optional) - the hostname advertised in the A/AAAA and SRV records. Defaults to a unique name derived from the machine hostname plus a short random suffix (e.g. `my-mac-a3f9.local`), so it never clashes with the name the OS's own mDNS responder defends (avoids the macOS "another computer on the network is using the name..." dialog)
 - `port` (number)
 - `type` (string)
 - `subtypes` (array of strings, optional)

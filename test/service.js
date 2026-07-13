@@ -43,7 +43,8 @@ test('minimal', function (t) {
   t.equal(s.name, 'Foo Bar')
   t.equal(s.protocol, 'tcp')
   t.equal(s.type, '_http._tcp')
-  t.equal(s.host, os.hostname())
+  t.ok(/-[0-9a-f]{4}\.local$/.test(s.host), 'host is a unique library-owned label')
+  t.notEqual(s.host, os.hostname(), 'host does not reuse the bare OS hostname')
   t.equal(s.port, 3000)
   t.equal(s.fqdn, 'Foo Bar._http._tcp.local')
   t.equal(s.txt, undefined)
@@ -80,7 +81,7 @@ test('_records() - minimal', function (t) {
   const s = new Service({ name: 'Foo Bar', type: 'http', protocol: 'tcp', port: 3000 })
   t.deepEqual(s.records(), [
     { data: s.fqdn, name: '_http._tcp.local', ttl: 28800, type: 'PTR' },
-    { data: { port: 3000, target: os.hostname() }, name: s.fqdn, ttl: 120, type: 'SRV' },
+    { data: { port: 3000, target: s.host }, name: s.fqdn, ttl: 120, type: 'SRV' },
     { data: [], name: s.fqdn, ttl: 4500, type: 'TXT' }
   ].concat(getAddressesRecords(s.host)))
   t.end()

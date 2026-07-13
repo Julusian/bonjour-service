@@ -5,6 +5,7 @@
       "declaration": true,
       "sourceMap": true,
        "outDir": "./dist",
+      "rootDir": "./src",
       "strict": true,
       "moduleResolution": "node",
       "baseUrl": ".",
@@ -12,6 +13,7 @@
       "esModuleInterop": true,
       "skipLibCheck": true,
       "forceConsistentCasingInFileNames": true
-    }
+    },
+    "exclude": ["scratch", "dist", "node_modules", "example.ts"]
   }
   

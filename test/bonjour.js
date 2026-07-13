@@ -94,7 +94,8 @@ test('bonjour.find', function (bonjour, t) {
         t.deepEqual(s.txt, { foo: 'bar' })
         t.deepEqual(s.rawTxt, [Buffer.from('666f6f3d626172', 'hex')])
       }
-      t.equal(s.host, os.hostname())
+      t.ok(/-[0-9a-f]{4}\.local$/.test(s.host), 'host is a unique library-owned label')
+      t.notEqual(s.host, os.hostname(), 'host does not reuse the bare OS hostname')
       t.equal(s.port, 3000)
       t.equal(s.type, 'test')
       t.equal(s.protocol, 'tcp')
