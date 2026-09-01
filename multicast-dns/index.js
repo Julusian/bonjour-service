@@ -17,6 +17,7 @@ module.exports = function (opts) {
   let memberships = {}
   let destroyed = false
   let interval = null
+  let binding = true
 
   if (type === 'udp6' && (!ip || !opts.interface)) {
     throw new Error('For IPv6 multicast you must specify `ip` and `interface`')
@@ -31,6 +32,9 @@ module.exports = function (opts) {
   })
 
   socket.on('error', function (err) {
+    // While binding, the bind callback below is responsible for reporting the failure.
+    // Emitting here too would report the same error twice
+    if (binding) return
     if (err.code === 'EACCES' || err.code === 'EADDRINUSE') that.emit('error', err)
     else that.emit('warning', err)
   })
@@ -69,6 +73,7 @@ module.exports = function (opts) {
   })
 
   bind(function (err) {
+    binding = false
     if (err) return that.emit('error', err)
     that.emit('ready')
   })
