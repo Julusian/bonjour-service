@@ -1,6 +1,11 @@
 # bonjour-service
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/julusian/bonjour-service/publish-release.yml?style=flat-square) ![npm bundle size](https://img.shields.io/bundlephobia/min/@julusian/bonjour-service?style=flat-square) ![GitHub Release Date](https://img.shields.io/github/release-date/julusian/bonjour-service?style=flat-square) ![npm](https://img.shields.io/npm/dw/@julusian/bonjour-service?color=%23888&style=flat-square) ![GitHub](https://img.shields.io/github/license/julusian/bonjour-service?style=flat-square) 
+[![npm version](https://img.shields.io/npm/v/@julusian/bonjour-service?style=flat-square)](https://www.npmjs.com/package/@julusian/bonjour-service)
+[![npm bundle size](https://img.shields.io/bundlephobia/min/@julusian/bonjour-service?style=flat-square)](https://bundlephobia.com/package/@julusian/bonjour-service)
+[![GitHub Release Date](https://img.shields.io/github/release-date/julusian/bonjour-service?style=flat-square)](https://github.com/julusian/bonjour-service/releases)
+[![npm weekly downloads](https://img.shields.io/npm/dw/@julusian/bonjour-service?color=%23888&style=flat-square)](https://www.npmjs.com/package/@julusian/bonjour-service)
+[![npm total downloads](https://img.shields.io/npm/dt/@julusian/bonjour-service?color=%23888&style=flat-square)](https://www.npmjs.com/package/@julusian/bonjour-service)
+[![GitHub](https://img.shields.io/github/license/julusian/bonjour-service?style=flat-square)](https://github.com/julusian/bonjour-service/blob/master/LICENSE)
 
 A Bonjour/Zeroconf protocol implementation in TypeScript. Publish
 services on the local network or discover existing services using
