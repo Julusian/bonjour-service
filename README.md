@@ -50,7 +50,9 @@ underlying multicast-dns server. For details see [the multicast-dns
 documentation](https://github.com/mafintosh/multicast-dns#mdns--multicastdnsoptions).
 
 `errorCallback` is an optional callback used to gracefully handle errors that would otherwise
-crash the process. While not being strictly required, providing this is highly recommended
+crash the process. This includes fatal errors from the underlying socket, such as it failing
+to bind (`EADDRINUSE`/`EACCES`). While not being strictly required, providing this is highly
+recommended
 
 ### Publishing
 

@@ -11,10 +11,14 @@ export class Server {
     private errorCallback   : Function
 
     constructor(opts: Partial<ServiceConfig>, errorCallback?: Function | undefined) {
+        this.errorCallback = errorCallback ?? function(err: any) { throw err }
         this.mdns = MulticastDNS(opts as any)
         this.mdns.setMaxListeners(0)
         this.mdns.on('query', this.respondToQuery.bind(this))
-        this.errorCallback = errorCallback ?? function(err: any) { throw err }
+        // multicast-dns emits `error` for fatal socket failures, such as the socket failing
+        // to bind (EADDRINUSE/EACCES). Without a listener node treats these as uncaught
+        // exceptions and terminates the process, so route them to the error callback instead.
+        this.mdns.on('error', (err: any) => this.errorCallback(err))
     }
 
     public register(records: Array<ServiceRecord> | ServiceRecord) {
