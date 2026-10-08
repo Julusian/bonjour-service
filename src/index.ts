@@ -75,7 +75,7 @@ export class Bonjour {
      */
     public destroy(callback?: CallableFunction) {
         this.registry.destroy()
-        this.server.mdns.destroy(callback)
+        this.server.destroy(callback)
     }
 
 }

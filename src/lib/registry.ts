@@ -141,6 +141,7 @@ export class Registry {
         const broadcast = () => {
             if (!service.activated || service.destroyed) return
 
+            server.markMulticast(packet)
             server.mdns.respond(packet, function () {
                 // This function will optionally be called with an error object. We'll
                 // just silently ignore it and retry as we normally would
