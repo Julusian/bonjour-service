@@ -188,7 +188,7 @@ export class Service extends EventEmitter {
         return {
             name    : `${service.type}${TLD}`,
             type    : 'PTR',
-            ttl     : service.ttl ?? 28800,
+            ttl     : service.ttl ?? 4500,
             flush   : false,
             data    : service.fqdn
         }
@@ -204,7 +204,7 @@ export class Service extends EventEmitter {
         return {
             name: `_${subtype}._sub.${service.type}${TLD}`,
             type: 'PTR',
-            ttl: service.ttl ?? 28800,
+            ttl: service.ttl ?? 4500,
             flush: false,
             data: `${service.name}.${service.type}${TLD}`
         }

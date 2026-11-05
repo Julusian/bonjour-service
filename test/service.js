@@ -80,7 +80,7 @@ test('subtypes', function (t) {
 test('_records() - minimal', function (t) {
   const s = new Service({ name: 'Foo Bar', type: 'http', protocol: 'tcp', port: 3000 })
   t.deepEqual(s.records(), [
-    { data: s.fqdn, name: '_http._tcp.local', ttl: 28800, type: 'PTR', flush: false },
+    { data: s.fqdn, name: '_http._tcp.local', ttl: 4500, type: 'PTR', flush: false },
     { data: { port: 3000, target: s.host }, name: s.fqdn, ttl: 120, type: 'SRV', flush: true },
     { data: [Buffer.alloc(0)], name: s.fqdn, ttl: 4500, type: 'TXT', flush: true }
   ].concat(getAddressesRecords(s.host)))
@@ -90,11 +90,11 @@ test('_records() - minimal', function (t) {
 test('_records() - everything', function (t) {
   const s = new Service({ name: 'Foo Bar', type: 'http', protocol: 'tcp', port: 3000, host: 'example.com', txt: { foo: 'bar' }, subtypes: ['foo', 'bar'] })
   t.deepEqual(s.records(), [
-    { data: s.fqdn, name: '_http._tcp.local', ttl: 28800, type: 'PTR', flush: false },
+    { data: s.fqdn, name: '_http._tcp.local', ttl: 4500, type: 'PTR', flush: false },
     { data: { port: 3000, target: 'example.com' }, name: s.fqdn, ttl: 120, type: 'SRV', flush: true },
     { data: [Buffer.from('666f6f3d626172', 'hex')], name: s.fqdn, ttl: 4500, type: 'TXT', flush: true },
-    { data: s.fqdn, name: '_foo._sub._http._tcp.local', ttl: 28800, type: 'PTR', flush: false },
-    { data: s.fqdn, name: '_bar._sub._http._tcp.local', ttl: 28800, type: 'PTR', flush: false }
+    { data: s.fqdn, name: '_foo._sub._http._tcp.local', ttl: 4500, type: 'PTR', flush: false },
+    { data: s.fqdn, name: '_bar._sub._http._tcp.local', ttl: 4500, type: 'PTR', flush: false }
   ].concat(getAddressesRecords(s.host)))
   t.end()
 })
