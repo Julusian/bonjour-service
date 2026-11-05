@@ -57,6 +57,8 @@ export interface ServiceRecord {
     type        : 'PTR' | 'SRV' | 'TXT' | 'A' | 'AAAA'
     ttl         : number
     data        : KeyValue | string | any
+    // Cache-flush bit: set on records only this host answers for, not on shared records like PTR (RFC 6762 section 10.2)
+    flush       : boolean
 }
 
 export interface ServiceReferer {
@@ -159,6 +161,7 @@ export class Service extends EventEmitter {
             name    : `${service.type}${TLD}`,
             type    : 'PTR',
             ttl     : service.ttl ?? 28800,
+            flush   : false,
             data    : service.fqdn
         }
     }
@@ -174,6 +177,7 @@ export class Service extends EventEmitter {
             name: `_${subtype}._sub.${service.type}${TLD}`,
             type: 'PTR',
             ttl: service.ttl ?? 28800,
+            flush: false,
             data: `${service.name}.${service.type}${TLD}`
         }
     }
@@ -188,6 +192,7 @@ export class Service extends EventEmitter {
             name    : service.fqdn,
             type    : 'SRV',
             ttl     : service.ttl ?? 120,
+            flush   : true,
             data: {
                 port    : service.port,
                 target  : service.host
@@ -205,6 +210,7 @@ export class Service extends EventEmitter {
             name    : service.fqdn,
             type    : 'TXT',
             ttl     : service.ttl ?? 4500,
+            flush   : true,
             data    : this.txtService.encode(service.txt)
         }
     }
@@ -220,6 +226,7 @@ export class Service extends EventEmitter {
             name    : service.host,
             type    : 'A',
             ttl     : service.ttl ?? 120,
+            flush   : true,
             data    : ip
         }
     }
@@ -235,6 +242,7 @@ export class Service extends EventEmitter {
             name    : service.host,
             type    : 'AAAA',
             ttl     : service.ttl ?? 120,
+            flush   : true,
             data    : ip
         }
     }
