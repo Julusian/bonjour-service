@@ -82,7 +82,7 @@ test('_records() - minimal', function (t) {
   t.deepEqual(s.records(), [
     { data: s.fqdn, name: '_http._tcp.local', ttl: 28800, type: 'PTR', flush: false },
     { data: { port: 3000, target: s.host }, name: s.fqdn, ttl: 120, type: 'SRV', flush: true },
-    { data: [], name: s.fqdn, ttl: 4500, type: 'TXT', flush: true }
+    { data: [Buffer.alloc(0)], name: s.fqdn, ttl: 4500, type: 'TXT', flush: true }
   ].concat(getAddressesRecords(s.host)))
   t.end()
 })

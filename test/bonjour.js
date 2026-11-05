@@ -87,7 +87,7 @@ test('bonjour.find', function (bonjour, t) {
         t.equal(s.name, 'Foo Bar')
         t.equal(s.fqdn, 'Foo Bar._test._tcp.local')
         t.deepEqual(s.txt, {})
-        t.deepEqual(s.rawTxt, [])
+        t.deepEqual(s.rawTxt, [Buffer.alloc(0)], 'empty TXT is sent as a single empty string')
       } else {
         t.equal(s.name, 'Baz')
         t.equal(s.fqdn, 'Baz._test._tcp.local')
