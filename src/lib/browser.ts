@@ -185,9 +185,25 @@ export class Browser extends EventEmitter<BrowserEvents> {
 
     /**
      * Broadcast the query again.
+     *
+     * Services already found are listed as known answers, so responders don't send them again
+     * while they still have more than half their TTL remaining (RFC 6762 section 7.1)
      */
     public update() {
-        this.mdns.query(this.name, 'PTR')
+        const now = Date.now()
+        const answers = this.wildcard ? [] : this._services
+            .filter((service) => service.ttl)
+            .map((service) => ({
+                name    : this.name,
+                type    : 'PTR',
+                ttl     : Math.floor((service.ttl as number) - (now - service.lastSeen) / 1000),
+                data    : service.fqdn,
+                original: service.ttl as number
+            }))
+            .filter((answer) => answer.ttl > answer.original / 2)
+            .map(({ original, ...answer }) => answer)
+
+        this.mdns.query({ questions: [{ name: this.name, type: 'PTR' }], answers })
     }
 
     /**
