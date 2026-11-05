@@ -32,7 +32,12 @@ export class Registry {
             if(opts?.probe) {
                 registry.probe(registry.server.mdns, service, (exists: boolean) => {
                     if(exists) {
-                        if(service.stop !== undefined) service.stop()
+                        // The name belongs to another host. Withdraw without the goodbyes stop() would
+                        // send, as those match the other host's PTR record and would remove it from
+                        // every cache on the network
+                        service.activated = false
+                        const index = registry.services.indexOf(service)
+                        if (index !== -1) registry.services.splice(index, 1)
                         console.log(new Error('Service name is already in use on the network'))
                         return
                     }

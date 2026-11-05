@@ -221,3 +221,23 @@ tape('no reply when nothing matches', function (t) {
   server.destroy()
   t.end()
 })
+
+tape('a service that loses probing does not send goodbyes for the name', function (t) {
+  const { server, sent } = setup()
+  const registry = new Registry(server)
+  server.mdns.query = (name, type, cb) => {
+    cb()
+    // another host answers for the name we probed
+    server.mdns.emit('response', { answers: [{ name: 'taken._http._tcp.local', type: 'SRV', data: {} }], additionals: [] })
+  }
+  const log = console.log
+  console.log = () => {}
+  const service = registry.publish({ name: 'taken', type: 'http', port: 3001, host: HOST })
+  setTimeout(function () {
+    console.log = log
+    t.equal(service.activated, false, 'service withdrawn')
+    t.equal(service.published, false, 'never published')
+    t.deepEqual(sent, [], 'nothing sent, so the other host keeps its records')
+    t.end()
+  }, 400)
+})
