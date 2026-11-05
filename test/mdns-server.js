@@ -241,3 +241,19 @@ tape('a service that loses probing does not send goodbyes for the name', functio
     t.end()
   }, 400)
 })
+
+tape('unpublishing a service leaves other services of the same type answering', function (t) {
+  const { server, sent, tick, query } = setup()
+  const registry = new Registry(server)
+  const a = registry.publish({ name: 'a', type: 'http', port: 3001, host: HOST, probe: false })
+  registry.publish({ name: 'b', type: 'http', port: 3002, host: HOST, probe: false })
+  a.stop(function () {
+    sent.length = 0
+    query(['_http._tcp.local', 'PTR'])
+    tick(1000) // b was just announced, so the reply is held for 1s
+    const ptrs = sent.flatMap((p) => p.answers).filter((r) => r.type === 'PTR').map((r) => r.data)
+    t.ok(ptrs.includes('b._http._tcp.local'), 'b still answers')
+    t.notOk(ptrs.includes('a._http._tcp.local'), 'a no longer answers')
+    t.end()
+  })
+})

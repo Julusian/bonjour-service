@@ -84,13 +84,13 @@ export class Server {
             if(!(type in this.registry)) {
                 return
             }
-            this.registry[type] = this.registry[type].filter((i: ServiceRecord) => i.name !== record.name)
+            // Match on data as well as name, as other services share PTR names such as `_http._tcp.local`
+            const isRecord = this.isDuplicateRecord(record)
+            this.registry[type] = this.registry[type].filter((i: ServiceRecord) => !isRecord(i))
 
-            // Forget when these were last sent, so a later re-publish isn't held back
-            for (const [key, entry] of this.lastMulticast) {
-                if (entry.type === type && entry.name === record.name) this.lastMulticast.delete(key)
-            }
-            this.pendingAnswers = this.pendingAnswers.filter((i: ServiceRecord) => i.type !== type || i.name !== record.name)
+            // Forget when this was last sent, so a later re-publish isn't held back
+            this.lastMulticast.delete(this.multicastKey(record))
+            this.pendingAnswers = this.pendingAnswers.filter((i: ServiceRecord) => !isRecord(i))
             if (this.pendingAnswers.length === 0) this.clearPending()
         }
 
