@@ -24,6 +24,7 @@
   "scripts": {
     "test": "standard --fix && tape test/*.js",
     "build": "tsc --removeComments true",
+    "prepublishOnly": "yarn build",
     "dev": "ts-node-dev --respawn --transpile-only ./src/index.ts",
     "example:simple": "node examples/simple"
   },
