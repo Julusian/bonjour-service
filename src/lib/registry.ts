@@ -8,6 +8,7 @@ export interface PublishOptions {
 
 const REANNOUNCE_MAX_MS : number    = 60 * 60 * 1000
 const REANNOUNCE_FACTOR : number    = 3
+const ANNOUNCE_COUNT    : number    = 8
 const noop = function () {}
 
 export class Registry {
@@ -133,11 +134,12 @@ export class Registry {
      *
      * Used to announce new services when they are first registered.
      *
-     * Broadcasts right away, then after 3 seconds, 9 seconds, 27 seconds,
-     * and so on, up to a maximum interval of one hour.
+     * Broadcasts right away, then 1 second later, then at intervals tripling each time,
+     * for up to eight announcements in total (RFC 6762 section 8.3).
      */
     private announce (server: Server, service: Service, options: PublishOptions | undefined) {
         var delay = 1000
+        var sent = 0
         var packet: Array<ServiceRecord> = service.records()
     
         // Register the records
@@ -156,11 +158,16 @@ export class Registry {
                     service.emit('up')
                 }
                 
-                delay = delay * REANNOUNCE_FACTOR
-                if (options?.announceOnInterval) delay = options.announceOnInterval
+                sent++
+                if (service.destroyed) return
 
-                if (delay > 0 && delay < REANNOUNCE_MAX_MS && !service.destroyed) {
+                if (options?.announceOnInterval) {
+                    if (options.announceOnInterval > 0 && options.announceOnInterval < REANNOUNCE_MAX_MS) {
+                        setTimeout(broadcast, options.announceOnInterval).unref()
+                    }
+                } else if (sent < ANNOUNCE_COUNT) {
                     setTimeout(broadcast, delay).unref()
+                    delay = delay * REANNOUNCE_FACTOR
                 }
             })
         }

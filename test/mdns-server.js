@@ -257,3 +257,21 @@ tape('unpublishing a service leaves other services of the same type answering', 
     t.end()
   })
 })
+
+tape('announcements start 1s apart, then back off, stopping after eight', function (t) {
+  const { server, sent } = setup()
+  const registry = new Registry(server)
+  const delays = []
+  const pending = []
+  const realSetTimeout = global.setTimeout
+  global.setTimeout = (fn, ms) => { delays.push(ms); pending.push(fn); return { unref () {} } }
+  try {
+    registry.publish({ name: 'baz', type: 'http', port: 3001, host: HOST, probe: false })
+    while (pending.length) pending.shift()()
+  } finally {
+    global.setTimeout = realSetTimeout
+  }
+  t.equal(sent.length, 8, 'eight announcements')
+  t.deepEqual(delays, [1000, 3000, 9000, 27000, 81000, 243000, 729000], 'first two 1s apart, then tripling')
+  t.end()
+})
