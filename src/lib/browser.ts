@@ -212,18 +212,15 @@ export class Browser extends EventEmitter<BrowserEvents> {
     public expire() {
         const currentTime = Date.now()
 
-        this._services = this._services.filter((service) => {
-            if (!service.ttl) return true // No expiry
-
-            const expireTime = service.lastSeen + service.ttl * 1000
-
-            if (expireTime < currentTime) {
-                this.emit('down', service)
-                return false
-            }
-
-            return true
+        const expired = this._services.filter((service) => {
+            if (!service.ttl) return false // No expiry
+            return service.lastSeen + service.ttl * 1000 < currentTime
         })
+        if (expired.length === 0) return
+
+        // Remove the services before emitting, so listeners see an up to date list
+        this._services = this._services.filter((service) => !expired.includes(service))
+        expired.forEach((service) => this.emit('down', service))
     }
 
     /**

@@ -38,3 +38,20 @@ tape('browser queries list services already found as known answers', function (t
   t.ok(answers[0].ttl <= 4500 && answers[0].ttl > 4490, 'with the remaining TTL')
   t.end()
 })
+
+tape('expire() removes expired services before emitting down', function (t) {
+  const mdns = fakeMdns()
+  const browser = new Browser(mdns, { type: 'http' })
+  announce(mdns, 'old', 120)
+  announce(mdns, 'new', 120)
+  browser.services.find((s) => s.name === 'old').lastSeen -= 121 * 1000
+
+  const seen = []
+  browser.on('down', function (service) {
+    seen.push(service.name)
+    t.deepEqual(browser.services.map((s) => s.name), ['new'], 'services no longer includes the expired service')
+  })
+  browser.expire()
+  t.deepEqual(seen, ['old'], 'down emitted for the expired service only')
+  t.end()
+})
