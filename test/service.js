@@ -125,3 +125,42 @@ test('allowInvalidType bypasses service type validation', function (t) {
   t.equal(s.type, '_companion-satellite._tcp')
   t.end()
 })
+
+test('names that would not fit in a DNS label are rejected', function (t) {
+  const make = (config) => () => new Service({ name: 'Foo Bar', type: 'http', port: 3000, ...config })
+  t.doesNotThrow(make({ name: 'x'.repeat(63) }), '63 byte name')
+  t.throws(make({ name: 'x'.repeat(64) }), /longer than 63 bytes/, '64 byte name')
+  t.throws(make({ name: 'é'.repeat(32) }), /longer than 63 bytes/, 'counts bytes, not characters')
+  t.throws(make({ subtypes: ['x'.repeat(63)] }), /Subtype .* longer than 63 bytes/, 'subtype, including its underscore')
+  t.throws(make({ host: 'x'.repeat(64) + '.local' }), /Host label .* longer than 63 bytes/, 'host label')
+  t.end()
+})
+
+test('service name must not contain control characters', function (t) {
+  t.throws(() => new Service({ name: 'Foo\nBar', type: 'http', port: 3000 }), /control characters/)
+  t.doesNotThrow(() => new Service({ name: 'Foo Bar (2) ü', type: 'http', port: 3000 }), 'spaces, punctuation and unicode are fine')
+  t.end()
+})
+
+test('txt entries must be encodable', function (t) {
+  const make = (txt) => () => new Service({ name: 'Foo Bar', type: 'http', port: 3000, txt })
+  t.doesNotThrow(make({ k: 'v'.repeat(253) }), '255 byte entry')
+  t.throws(make({ k: 'v'.repeat(254) }), /longer than 255 bytes/, '256 byte entry')
+  t.throws(make({ '': 'v' }), /at least one character/, 'empty key')
+  t.throws(make({ 'a=b': 'v' }), /not contain '='/, 'key containing =')
+  t.end()
+})
+
+test('default host fits in a DNS label, even with a long hostname', function (t) {
+  const hostname = os.hostname
+  os.hostname = () => 'x'.repeat(57) + '-' + 'y'.repeat(20)
+  try {
+    const s = new Service({ name: 'Foo Bar', type: 'http', port: 3000 })
+    const label = s.host.split('.')[0]
+    t.ok(label.length <= 63, 'label is at most 63 characters')
+    t.ok(/^x{57}-[0-9a-f]{4}$/.test(label), 'truncated without a doubled hyphen')
+  } finally {
+    os.hostname = hostname
+  }
+  t.end()
+})

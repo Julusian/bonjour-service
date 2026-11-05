@@ -30,9 +30,30 @@ function defaultHost(): string {
         .replace(/[^A-Za-z0-9-]/g, '-') // keep to a valid DNS label
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
+        .slice(0, 58)                   // leave room for the suffix in a 63 byte label
+        .replace(/-$/, '')
     if (!base) base = 'bonjour'
     const suffix = randomBytes(2).toString('hex')
     return `${base}-${suffix}${TLD}`
+}
+
+/**
+ * Check a value fits in a single DNS label, which is limited to 63 bytes (RFC 1035 section 2.3.4).
+ * dns-packet does not check this, and writes longer labels into corrupt packets.
+ */
+function validateLabel(what: string, label: string): void {
+    if (Buffer.byteLength(label) > 63) throw new Error(`${what} "${label}" is longer than 63 bytes`)
+}
+
+/**
+ * Check the TXT data can be encoded as DNS-SD key/value strings (RFC 6763 section 6)
+ */
+function validateTxt(txt: KeyValue): void {
+    for (const [key, value] of Object.entries(txt)) {
+        if (key.length === 0 || key.includes('=')) throw new Error(`TXT key "${key}" must be at least one character, and not contain '='`)
+        // Each string is prefixed with a single length byte
+        if (Buffer.byteLength(`${key}=${value}`) > 255) throw new Error(`TXT entry "${key}" is longer than 255 bytes`)
+    }
 }
 
 export interface ServiceConfig {
@@ -118,6 +139,13 @@ export class Service extends EventEmitter {
         this.ttl            = config.ttl
         this.subtypes       = config.subtypes
         this.disableIPv6    = !!config.disableIPv6
+
+        // Instance names may contain anything except control characters (RFC 6763 section 4.1.1)
+        if (/[\x00-\x1f\x7f]/.test(this.name)) throw new Error(`Service name "${this.name}" must not contain control characters`)
+        validateLabel('Service name', this.name)
+        for (const subtype of this.subtypes || []) validateLabel('Subtype', `_${subtype}`)
+        for (const label of this.host.split('.')) validateLabel('Host label', label)
+        if (this.txt) validateTxt(this.txt)
     }
 
 
