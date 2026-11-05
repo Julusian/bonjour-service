@@ -172,6 +172,20 @@ test('bonjour.find - down event', function (bonjour, t) {
   })
 })
 
+test('bonjour.find - without a type, finds services through service type enumeration', function (bonjour, t) {
+  const service = bonjour.publish({ name: 'Foo Bar', type: 'test', port: 3000 })
+
+  service.on('up', function () {
+    const browser = bonjour.find()
+
+    browser.on('up', function (s) {
+      t.equal(s.fqdn, 'Foo Bar._test._tcp.local')
+      bonjour.destroy()
+      t.end()
+    })
+  })
+})
+
 test('bonjour.findOne - callback', function (bonjour, t) {
   const next = afterAll(function () {
     bonjour.findOne({ type: 'test' }, undefined, function (s) {

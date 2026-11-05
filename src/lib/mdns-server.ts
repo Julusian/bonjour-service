@@ -15,6 +15,11 @@ const MULTICAST_INTERVAL_MS : number = 1000
  */
 const LEGACY_UNICAST_TTL    : number = 10
 
+/**
+ * Name queried to list the service types on the network (RFC 6763 section 9)
+ */
+const SERVICE_TYPE_ENUMERATION : string = '_services._dns-sd._udp.local'
+
 interface MulticastEntry {
     type    : string
     name    : string
@@ -76,6 +81,11 @@ export class Server {
                 return
             }
             subRegistry.push(record)
+
+            // List the service type, for service type enumeration queries
+            if (this.isServiceTypePTR(record)) {
+                shouldRegister({ name: SERVICE_TYPE_ENUMERATION, type: 'PTR', ttl: record.ttl, flush: false, data: record.name })
+            }
         }
 
         if(Array.isArray(records)) {
@@ -102,6 +112,12 @@ export class Server {
             this.lastMulticast.delete(this.multicastKey(record))
             this.pendingAnswers = this.pendingAnswers.filter((i: ServiceRecord) => !isRecord(i))
             if (this.pendingAnswers.length === 0) this.clearPending()
+
+            // Stop listing the service type once no services of that type remain
+            if (this.isServiceTypePTR(record) && !this.registry.PTR.some((i: ServiceRecord) => this.isServiceTypePTR(i) && dnsEqual(i.name, record.name))) {
+                const listing = this.registry.PTR.find((i: ServiceRecord) => i.name === SERVICE_TYPE_ENUMERATION && dnsEqual(i.data, record.name))
+                if (listing) shouldUnregister(listing)
+            }
         }
 
         if(Array.isArray(records)) {
@@ -111,6 +127,14 @@ export class Server {
             // Single record
             shouldUnregister(records as ServiceRecord)
         }
+    }
+
+    /**
+     * Whether this is the PTR record listing a service under its type, e.g. `_http._tcp.local`,
+     * rather than a subtype or service type enumeration record
+     */
+    private isServiceTypePTR(record: ServiceRecord): boolean {
+        return record.type === 'PTR' && record.name !== SERVICE_TYPE_ENUMERATION && !record.name.includes('._sub.')
     }
 
     /**

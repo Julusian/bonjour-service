@@ -331,3 +331,26 @@ tape('queries from a port other than 5353 get a unicast reply, as a conventional
   t.equal(sent.length, 1, 'and does not hold back a following multicast reply')
   t.end()
 })
+
+tape('service type enumeration lists each published type once, until its last service is stopped', function (t) {
+  const { server, sent, tick, query } = setup()
+  const types = () => {
+    sent.length = 0
+    query(['_services._dns-sd._udp.local', 'PTR'])
+    tick(1000)
+    return sent.flatMap((p) => p.answers).map((r) => r.data).sort()
+  }
+  t.deepEqual(types(), ['_http._tcp.local'], 'type from the registered records')
+
+  const more = { name: '_http._tcp.local', type: 'PTR', ttl: 4500, flush: false, data: 'bar._http._tcp.local' }
+  const sub = { name: '_printer._sub._http._tcp.local', type: 'PTR', ttl: 4500, flush: false, data: 'bar._http._tcp.local' }
+  const other = { name: '_ipp._tcp.local', type: 'PTR', ttl: 4500, flush: false, data: 'bar._ipp._tcp.local' }
+  server.register([more, sub, other])
+  t.deepEqual(types(), ['_http._tcp.local', '_ipp._tcp.local'], 'listed once per type, subtypes not listed')
+
+  server.unregister(records()[0])
+  t.deepEqual(types(), ['_http._tcp.local', '_ipp._tcp.local'], 'still listed while another service of the type remains')
+  server.unregister([more, sub, other])
+  t.deepEqual(types(), [], 'removed with the last service of the type')
+  t.end()
+})
