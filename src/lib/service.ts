@@ -7,7 +7,7 @@ import { randomBytes }                  from 'crypto'
 import DnsTxt                           from './dns-txt'
 import KeyValue                         from './KeyValue'
 import { EventEmitter }                 from 'events'
-import { toString as ServiceToString }  from './service-types'
+import { toString as ServiceToString, validateServiceName } from './service-types'
 
 const TLD: string = '.local'
 
@@ -48,6 +48,8 @@ export interface ServiceConfig {
 
     probe?      : boolean
     disableIPv6?: boolean
+    // Skip the RFC 6763 section 7.2 checks on `type`, for existing services that already advertise a non-compliant type
+    allowInvalidType?: boolean
 }
 
 export interface ServiceRecord {
@@ -98,6 +100,11 @@ export class Service extends EventEmitter {
         if (!config.name) throw new Error('ServiceConfig requires `name` property to be set');
         if (!config.type) throw new Error('ServiceConfig requires `type` property to be set');
         if (!config.port) throw new Error('ServiceConfig requires `port` property to be set');
+
+        if (!config.allowInvalidType) {
+            const typeError = validateServiceName(config.type)
+            if (typeError) throw new Error(typeError)
+        }
 
         this.name           = config.name.split('.').join('-')
         this.protocol       = config.protocol || 'tcp'

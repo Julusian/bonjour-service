@@ -70,12 +70,13 @@ Options are:
 - `name` (string)
 - `host` (string, optional) - the hostname advertised in the A/AAAA and SRV records. Defaults to a unique name derived from the machine hostname plus a short random suffix (e.g. `my-mac-a3f9.local`), so it never clashes with the name the OS's own mDNS responder defends (avoids the macOS "another computer on the network is using the name..." dialog)
 - `port` (number)
-- `type` (string)
+- `type` (string) - at most 15 characters, without the leading underscore (e.g. `http`). Longer types are rejected per [RFC 6763 section 7.2](https://www.rfc-editor.org/rfc/rfc6763#section-7.2), as some mDNS implementations crash on them
 - `subtypes` (array of strings, optional)
 - `protocol` (string, optional) - `udp` or `tcp` (default)
 - `txt` (object, optional) - a key/value object to broadcast as the TXT
   record
 - `disableIPv6` (boolean, optional) disble IPv6 addresses
+- `allowInvalidType` (boolean, optional) - skip the `type` checks above. Only intended for keeping an existing non-compliant type working; other mDNS implementations may reject or crash on it
 
 IANA maintains a [list of official service types and port
 numbers](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml).

@@ -98,3 +98,30 @@ test('_records() - everything', function (t) {
   ].concat(getAddressesRecords(s.host)))
   t.end()
 })
+
+test('service type must comply with RFC 6763 section 7.2', function (t) {
+  const valid = ['http', 'a', 'companion-sat', 'abcdefghijklmno', 'switcher_ctrl']
+  for (const type of valid) {
+    t.doesNotThrow(function () {
+      new Service({ name: 'Foo Bar', type, port: 3000 }) // eslint-disable-line no-new
+    }, `accepts ${type}`)
+  }
+
+  const invalid = {
+    'companion-satellite': /longer than 15 characters/,
+    abcdefghijklmnop: /longer than 15 characters/,
+    'foo.bar': /must not contain dots/
+  }
+  for (const [type, message] of Object.entries(invalid)) {
+    t.throws(function () {
+      new Service({ name: 'Foo Bar', type, port: 3000 }) // eslint-disable-line no-new
+    }, message, `rejects ${type}`)
+  }
+  t.end()
+})
+
+test('allowInvalidType bypasses service type validation', function (t) {
+  const s = new Service({ name: 'Foo Bar', type: 'companion-satellite', port: 3000, allowInvalidType: true })
+  t.equal(s.type, '_companion-satellite._tcp')
+  t.end()
+})

@@ -84,3 +84,17 @@ export const toType = (string: string): ServiceType => {
         subtype: subtype
     }
 }
+
+/**
+ * Validate a service name (the `http` in `_http._tcp`) against RFC 6763 section 7.2, which limits
+ * it to 15 characters. Other mDNS implementations reject (or crash on) longer names, so we refuse to
+ * advertise them. The stricter RFC 6335 character rules are not enforced, as types such as
+ * `_switcher_ctrl._udp` are deployed in the wild and accepted by mDNSResponder.
+ * @param name
+ * @returns an error message, or undefined if the name is valid
+ */
+export const validateServiceName = (name: string): string | undefined => {
+    if (name.length > 15) return `Service type "${name}" is longer than 15 characters (RFC 6763 section 7.2)`
+    if (name.includes('.')) return `Service type "${name}" must not contain dots`
+    return undefined
+}
