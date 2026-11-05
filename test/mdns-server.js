@@ -275,3 +275,30 @@ tape('announcements start 1s apart, then back off, stopping after eight', functi
   t.deepEqual(delays, [1000, 3000, 9000, 27000, 81000, 243000, 729000], 'first two 1s apart, then tripling')
   t.end()
 })
+
+tape('answers the querier already knows with at least half their TTL are left out', function (t) {
+  const { server, sent } = setup()
+  const ptr = { name: '_http._tcp.local', type: 'PTR', data: 'foo._http._tcp.local' }
+  const ask = (ttl) => server.mdns.emit('query', { questions: [{ name: '_http._tcp.local', type: 'PTR' }], answers: [{ ...ptr, ttl }] }, {})
+
+  ask(14400)
+  t.equal(sent.length, 0, 'known with half the TTL left: no reply')
+  ask(14399)
+  t.equal(sent.length, 1, 'known with less than half the TTL left: answered')
+  t.end()
+})
+
+tape('a known answer with different data does not suppress the answer', function (t) {
+  const { server, sent } = setup()
+  const ask = (known) => server.mdns.emit('query', { questions: [{ name: FQDN, type: known.type }], answers: [{ name: FQDN, ttl: 4500, ...known }] }, {})
+
+  ask({ type: 'SRV', data: { port: 4000, weight: 0, priority: 0, target: HOST } })
+  t.equal(sent.length, 1, 'SRV with an old port: answered')
+  ask({ type: 'TXT', data: [Buffer.from('a=b')] })
+  t.equal(sent.length, 2, 'TXT with old contents: answered')
+
+  const fresh = setup()
+  fresh.server.mdns.emit('query', { questions: [{ name: FQDN, type: 'SRV' }], answers: [{ name: FQDN.toUpperCase(), type: 'SRV', ttl: 120, data: { port: 3000, weight: 0, priority: 0, target: HOST } }] }, {})
+  t.equal(fresh.sent.length, 0, 'matching SRV, compared case-insensitively: no reply')
+  t.end()
+})

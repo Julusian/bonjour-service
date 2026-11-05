@@ -129,7 +129,12 @@ export class Server {
               : this.recordsFor(name, type))
         })
 
-        answers = answers.filter(this.unique())
+        // Known-Answer Suppression: leave out answers the querier already holds with at least
+        // half their TTL remaining (RFC 6762 section 7.1)
+        const knownAnswers: Array<any> = query.answers ?? []
+        answers = answers
+            .filter(this.unique())
+            .filter((record) => !knownAnswers.some((known) => known.ttl >= record.ttl / 2 && this.isSameRecord(record, known)))
         if (answers.length === 0) return
 
         // A record must not be multicast again within a second of the last time (RFC 6762 section 6).
@@ -239,6 +244,26 @@ export class Server {
             return a.type === b.type &&
                 a.name === b.name &&
                 deepEqual(a.data, b.data)
+        }
+    }
+
+    /**
+     * Compare one of our records with one decoded from a packet, ignoring the TTL
+     */
+    private isSameRecord(ours: ServiceRecord, theirs: any): boolean {
+        if (ours.type !== theirs.type || !dnsEqual(ours.name, theirs.name)) return false
+        switch (ours.type) {
+            case 'PTR':
+                return typeof theirs.data === 'string' && dnsEqual(ours.data, theirs.data)
+            case 'SRV':
+                return theirs.data?.port === ours.data.port && typeof theirs.data.target === 'string' && dnsEqual(ours.data.target, theirs.data.target)
+            case 'TXT': {
+                const a = [].concat(ours.data).map((i: any) => Buffer.from(i))
+                const b = [].concat(theirs.data).map((i: any) => Buffer.from(i))
+                return a.length === b.length && a.every((buf: Buffer, i: number) => buf.equals(b[i]))
+            }
+            default:
+                return deepEqual(ours.data, theirs.data)
         }
     }
 
