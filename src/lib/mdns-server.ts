@@ -3,11 +3,17 @@ import MulticastDNS                         from '../../multicast-dns'
 import KeyValue                             from './KeyValue'
 import deepEqual                            from 'fast-deep-equal/es6'
 import dnsEqual                             from './utils/dns-equal'
+import { RemoteInfo }                       from 'dgram'
 
 /**
  * Minimum interval between multicasts of the same record (RFC 6762 section 6)
  */
 const MULTICAST_INTERVAL_MS : number = 1000
+
+/**
+ * Maximum TTL in replies to legacy unicast queries (RFC 6762 section 6.7)
+ */
+const LEGACY_UNICAST_TTL    : number = 10
 
 interface MulticastEntry {
     type    : string
@@ -18,6 +24,8 @@ interface MulticastEntry {
 export class Server {
 
     public mdns             : any
+    // The mDNS port we listen on. Queries from any other port are legacy unicast queries
+    private port            : number
     private registry        : KeyValue = {}
     private errorCallback   : Function
     // When each record (by name, type and data) was last multicast, for rate limiting replies
@@ -42,6 +50,8 @@ export class Server {
 
     constructor(opts: Partial<ServiceConfig>, errorCallback?: Function | undefined) {
         this.errorCallback = errorCallback ?? function(err: any) { throw err }
+        const port = (opts as any).port
+        this.port = typeof port === 'number' ? port : 5353
         this.mdns = MulticastDNS(opts as any)
         this.mdns.setMaxListeners(0)
         this.mdns.on('query', this.respondToQuery.bind(this))
@@ -115,7 +125,7 @@ export class Server {
         })
     }
 
-    private respondToQuery(query: KeyValue): void {
+    private respondToQuery(query: KeyValue, rinfo?: RemoteInfo): void {
         const now = this.now()
 
         // generate the answers section, for all questions in the packet
@@ -136,6 +146,11 @@ export class Server {
             .filter(this.unique())
             .filter((record) => !knownAnswers.some((known) => known.ttl >= record.ttl / 2 && this.isSameRecord(record, known)))
         if (answers.length === 0) return
+
+        if (rinfo && typeof rinfo.port === 'number' && rinfo.port !== this.port) {
+            this.sendLegacyReply(query, answers, rinfo)
+            return
+        }
 
         // A record must not be multicast again within a second of the last time (RFC 6762 section 6).
         // Rather than dropping those answers, which would leave a client that missed the earlier
@@ -179,6 +194,43 @@ export class Server {
     }
 
     private sendReply(answers: Array<ServiceRecord>): void {
+        const additionals = this.additionalsFor(answers)
+
+        this.markMulticast(answers)
+
+        this.mdns.respond({ answers: answers, additionals: additionals }, (err: any) => {
+          if (err) {
+              this.errorCallback(err);
+          }
+        })
+    }
+
+    /**
+     * Reply to a query from a simple resolver not listening on the mDNS port (RFC 6762 section 6.7).
+     * This goes straight back to the querier by unicast, so is not rate limited. It must look like
+     * a conventional unicast DNS reply: repeating the query ID and questions, without the cache-flush
+     * bit, and with short TTLs as the resolver won't see later updates.
+     */
+    private sendLegacyReply(query: KeyValue, answers: Array<ServiceRecord>, rinfo: RemoteInfo): void {
+        const legacy = (record: ServiceRecord): ServiceRecord => ({
+            ...record,
+            ttl     : Math.min(record.ttl, LEGACY_UNICAST_TTL),
+            flush   : false
+        })
+
+        this.mdns.respond({
+            id          : query.id,
+            questions   : query.questions,
+            answers     : answers.map(legacy),
+            additionals : this.additionalsFor(answers).map(legacy)
+        }, { address: rinfo.address, port: rinfo.port }, (err: any) => {
+          if (err) {
+              this.errorCallback(err);
+          }
+        })
+    }
+
+    private additionalsFor(answers: Array<ServiceRecord>): Array<ServiceRecord> {
         // generate the additionals section, with the records a resolver will need next (RFC 6763 section 12)
         var additionals: Array<any> = []
         answers.forEach((answer: any) => {
@@ -200,17 +252,9 @@ export class Server {
               .concat(this.recordsFor(target, 'AAAA'))
           })
 
-        additionals = additionals
+        return additionals
           .filter(this.unique())
           .filter((record: any) => answers.indexOf(record) === -1)
-
-        this.markMulticast(answers)
-
-        this.mdns.respond({ answers: answers, additionals: additionals }, (err: any) => {
-          if (err) {
-              this.errorCallback(err);
-          }
-        })
     }
 
     private multicastKey(record: ServiceRecord): string {

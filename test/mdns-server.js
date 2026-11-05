@@ -302,3 +302,32 @@ tape('a known answer with different data does not suppress the answer', function
   t.equal(fresh.sent.length, 0, 'matching SRV, compared case-insensitively: no reply')
   t.end()
 })
+
+tape('queries from a port other than 5353 get a unicast reply, as a conventional DNS response', function (t) {
+  const { server, sent, query } = setup()
+  const unicast = []
+  server.mdns.respond = (packet, rinfo, cb) => {
+    if (typeof rinfo === 'function') return sent.push(packet)
+    unicast.push({ packet, rinfo })
+  }
+  const questions = [{ name: '_http._tcp.local', type: 'PTR' }]
+
+  server.mdns.emit('query', { id: 1234, questions }, { address: '192.168.1.20', port: 54321 })
+  t.equal(sent.length, 0, 'nothing multicast')
+  t.equal(unicast.length, 1, 'one unicast reply')
+  const { packet, rinfo } = unicast[0]
+  t.deepEqual(rinfo, { address: '192.168.1.20', port: 54321 }, 'sent to the querier')
+  t.equal(packet.id, 1234, 'repeats the query ID')
+  t.deepEqual(packet.questions, questions, 'repeats the questions')
+  const all = packet.answers.concat(packet.additionals)
+  t.deepEqual(summary(all), ['A myhost.local', 'AAAA myhost.local', 'PTR _http._tcp.local', 'SRV foo._http._tcp.local', 'TXT foo._http._tcp.local'], 'answers with additionals')
+  t.ok(all.every((r) => r.ttl <= 10), 'TTLs capped at 10s')
+  t.ok(all.every((r) => !r.flush), 'no cache-flush bit')
+
+  server.mdns.emit('query', { id: 1235, questions }, { address: '192.168.1.20', port: 54321 })
+  t.equal(unicast.length, 2, 'not rate limited')
+
+  query(['_http._tcp.local', 'PTR'])
+  t.equal(sent.length, 1, 'and does not hold back a following multicast reply')
+  t.end()
+})
