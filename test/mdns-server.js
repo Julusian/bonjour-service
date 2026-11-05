@@ -225,7 +225,7 @@ tape('no reply when nothing matches', function (t) {
 tape('a service that loses probing does not send goodbyes for the name', function (t) {
   const { server, sent } = setup()
   const registry = new Registry(server)
-  server.mdns.query = (name, type, cb) => {
+  server.mdns.query = (query, cb) => {
     cb()
     // another host answers for the name we probed
     server.mdns.emit('response', { answers: [{ name: 'taken._http._tcp.local', type: 'SRV', data: {} }], additionals: [] })
@@ -353,4 +353,20 @@ tape('service type enumeration lists each published type once, until its last se
   server.unregister([more, sub, other])
   t.deepEqual(types(), [], 'removed with the last service of the type')
   t.end()
+})
+
+tape('probes ask for the name, with the proposed records in the authority section', function (t) {
+  const { server } = setup()
+  const registry = new Registry(server)
+  const probes = []
+  server.mdns.query = (query, cb) => { probes.push(query); cb() }
+  const keepAlive = setTimeout(() => {}, 5000) // probe timers are unref'd
+  const service = registry.publish({ name: 'baz', type: 'http', port: 3001, host: HOST, txt: { a: 'b' } })
+  service.on('up', function () {
+    clearTimeout(keepAlive)
+    t.equal(probes.length, 3, 'three probes')
+    t.deepEqual(probes[0].questions, [{ name: 'baz._http._tcp.local', type: 'ANY' }], 'question for the name')
+    t.deepEqual(summary(probes[0].authorities), ['SRV baz._http._tcp.local', 'TXT baz._http._tcp.local'], 'proposed records')
+    t.end()
+  })
 })

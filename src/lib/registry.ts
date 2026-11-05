@@ -95,7 +95,10 @@ export class Registry {
             // abort if the service have or is being stopped in the meantime
             if (!service.activated || service.destroyed) return
         
-            mdns.query(service.fqdn, 'ANY', function () {
+            // Include the records we propose to use in the Authority Section, so that a host probing
+            // for the same name at the same time can tell which of us should back off (RFC 6762 section 8.2)
+            const authorities = service.records().filter((record) => dnsEqual(record.name, service.fqdn))
+            mdns.query({ questions: [{ name: service.fqdn, type: 'ANY' }], authorities }, function () {
                 // This function will optionally be called with an error object. We'll
                 // just silently ignore it and retry as we normally would
                 sent = true
