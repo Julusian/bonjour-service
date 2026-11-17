@@ -222,24 +222,65 @@ tape('no reply when nothing matches', function (t) {
   t.end()
 })
 
-tape('a service that loses probing does not send goodbyes for the name', function (t) {
+// Publish with probe queries answered by `answer(name)`, returning what was probed for and announced
+const probeWith = function (answer, config, onUp) {
   const { server, sent } = setup()
   const registry = new Registry(server)
-  server.mdns.query = (query, cb) => {
-    cb()
-    // another host answers for the name we probed
-    server.mdns.emit('response', { answers: [{ name: 'taken._http._tcp.local', type: 'SRV', data: {} }], additionals: [] })
+  const probed = []
+  server.mdns.query = (query, done) => {
+    const name = query.questions[0].name
+    probed.push(name)
+    done()
+    const answers = answer(name)
+    if (answers.length) server.mdns.emit('response', { answers, additionals: [] })
   }
-  const log = console.log
-  console.log = () => {}
-  const service = registry.publish({ name: 'taken', type: 'http', port: 3001, host: HOST })
-  setTimeout(function () {
-    console.log = log
-    t.equal(service.activated, false, 'service withdrawn')
-    t.equal(service.published, false, 'never published')
-    t.deepEqual(sent, [], 'nothing sent, so the other host keeps its records')
+  const keepAlive = setTimeout(() => {}, 10000) // probe timers are unref'd
+  const service = registry.publish({ type: 'http', port: 3001, host: HOST, ...config })
+  const renames = []
+  service.on('rename', (name) => renames.push(name))
+  service.on('up', function () {
+    clearTimeout(keepAlive)
+    onUp({ service, probed, renames, sent })
+  })
+}
+
+const srv = (name, target, ttl = 120) => ({ name, type: 'SRV', ttl, data: { port: 3001, target } })
+
+tape('a service that loses probing moves to the next name, without sending anything for the taken one', function (t) {
+  probeWith((name) => name.startsWith('taken.') ? [srv(name, 'other.local')] : [], { name: 'taken' }, function ({ service, probed, renames, sent }) {
+    t.equal(service.name, 'taken (2)', 'renamed')
+    t.equal(service.fqdn, 'taken (2)._http._tcp.local')
+    t.deepEqual(renames, ['taken (2)'], 'rename emitted')
+    t.equal(probed.filter((name) => name === 'taken (2)._http._tcp.local').length, 3, 'new name probed in full')
+    t.ok(sent.length > 0, 'announced')
+    t.ok(sent.every((packet) => [].concat(packet.answers || packet).every((r) => !String(r.name).startsWith('taken.') && r.data !== 'taken._http._tcp.local')), 'nothing sent for the taken name')
     t.end()
-  }, 400)
+  })
+})
+
+tape('each further conflict moves to the next number', function (t) {
+  const taken = ['dup', 'dup (2)', 'dup (3)'].map((n) => `${n}._http._tcp.local`)
+  probeWith((name) => taken.includes(name) ? [srv(name, 'other.local')] : [], { name: 'dup' }, function ({ service, renames }) {
+    t.equal(service.name, 'dup (4)')
+    t.deepEqual(renames, ['dup (2)', 'dup (3)', 'dup (4)'])
+    t.end()
+  })
+})
+
+tape('goodbyes for the name are not a conflict', function (t) {
+  probeWith((name) => [srv(name, 'other.local', 0)], { name: 'baz' }, function ({ service, renames }) {
+    t.equal(service.name, 'baz')
+    t.deepEqual(renames, [])
+    t.end()
+  })
+})
+
+tape('records the same as the ones proposed are not a conflict', function (t) {
+  probeWith((name) => [srv(name, HOST)], { name: 'baz' }, function ({ service, renames }) {
+    t.equal(service.name, 'baz')
+    t.deepEqual(renames, [])
+    t.end()
+  })
 })
 
 tape('unpublishing a service leaves other services of the same type answering', function (t) {

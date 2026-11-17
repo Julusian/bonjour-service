@@ -317,8 +317,9 @@ export class Server {
 
     /**
      * Compare one of our records with one decoded from a packet, ignoring the TTL
+     * @internal
      */
-    private isSameRecord(ours: ServiceRecord, theirs: any): boolean {
+    public isSameRecord(ours: ServiceRecord, theirs: any): boolean {
         if (ours.type !== theirs.type || !dnsEqual(ours.name, theirs.name)) return false
         switch (ours.type) {
             case 'PTR':

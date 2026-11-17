@@ -158,9 +158,10 @@ Check any services for an expired TTL and emit stop events.
 
 Emitted when the service is up.
 
-#### `Event: error`
+#### `Event: rename`
 
-Emitted if an error occurrs while publishing the service.
+Emitted with the new name, when the name was found to be in use by another host while probing. The
+service then tries `Name (2)`, `Name (3)` and so on ([RFC 6763 appendix D](https://www.rfc-editor.org/rfc/rfc6763#appendix-D)).
 
 #### `service.stop([callback])`
 

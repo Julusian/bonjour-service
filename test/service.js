@@ -164,3 +164,18 @@ test('default host fits in a DNS label, even with a long hostname', function (t)
   }
   t.end()
 })
+
+test('renameAfterConflict numbers the name, keeping it within a DNS label', function (t) {
+  const service = new Service({ name: 'Foo', type: 'http', port: 3000 })
+  service.renameAfterConflict()
+  t.equal(service.name, 'Foo (2)')
+  t.equal(service.fqdn, 'Foo (2)._http._tcp.local')
+  service.renameAfterConflict()
+  t.equal(service.name, 'Foo (3)')
+
+  const long = new Service({ name: 'é'.repeat(31), type: 'http', port: 3000 }) // 62 bytes
+  long.renameAfterConflict()
+  t.equal(long.name, 'é'.repeat(29) + ' (2)', 'shortened by whole characters')
+  t.ok(Buffer.byteLength(long.name) <= 63)
+  t.end()
+})

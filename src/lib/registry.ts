@@ -31,19 +31,19 @@ export class Registry {
             if(!(service instanceof Service)) return
         
             if(opts?.probe) {
-                registry.probe(registry.server.mdns, service, (exists: boolean) => {
+                const probeThenAnnounce = () => registry.probe(registry.server, service, (exists: boolean) => {
                     if(exists) {
-                        // The name belongs to another host. Withdraw without the goodbyes stop() would
-                        // send, as those match the other host's PTR record and would remove it from
-                        // every cache on the network
-                        service.activated = false
-                        const index = registry.services.indexOf(service)
-                        if (index !== -1) registry.services.splice(index, 1)
-                        console.log(new Error('Service name is already in use on the network'))
+                        // The name belongs to another host, so try the next one. Nothing has been sent for the
+                        // taken name, so there is nothing to withdraw: goodbyes for it would match the other
+                        // host's PTR record and remove it from every cache on the network
+                        service.renameAfterConflict()
+                        service.emit('rename', service.name)
+                        probeThenAnnounce()
                         return
                     }
                     registry.announce(registry.server, service, options)
                 })
+                probeThenAnnounce()
             } else {
                 registry.announce(registry.server, service, options)
             }
@@ -86,7 +86,8 @@ export class Registry {
      * 0 and 250 ms) before probing.
      *
      */
-    private probe(mdns: any, service: Service, callback: CallableFunction) {
+    private probe(server: Server, service: Service, callback: CallableFunction) {
+        const mdns = server.mdns
         var sent    : boolean   = false
         var retries : number    = 0
         var timer   : any
@@ -117,8 +118,11 @@ export class Registry {
             if (packet.answers.some(matchRR) || packet.additionals.some(matchRR)) done(true)
         }
         
-        const matchRR = (rr: Service) => {
-            return dnsEqual(rr.name, service.fqdn)
+        // Only a live record that differs from what we propose is a conflict (RFC 6762 section 9). A goodbye, or a
+        // copy of our own records, doesn't mean another host has the name
+        const matchRR = (rr: any) => {
+            if (!dnsEqual(rr.name, service.fqdn) || rr.ttl === 0) return false
+            return !service.records().some((ours) => server.isSameRecord(ours, rr))
         }
         
         const done = (exists: boolean) => {

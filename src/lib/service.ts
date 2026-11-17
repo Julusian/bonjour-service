@@ -129,25 +129,47 @@ export class Service extends EventEmitter {
             if (typeError) throw new Error(typeError)
         }
 
-        this.name           = config.name.split('.').join('-')
         this.protocol       = config.protocol || 'tcp'
         this.type           = ServiceToString({ name: config.type, protocol: this.protocol })
+        this.name           = ''
+        this.fqdn           = ''
+        this.setName(config.name)
         this.port           = config.port
         this.host           = config.host || defaultHost()
-        this.fqdn           = `${this.name}.${this.type}${TLD}`
         this.txt            = config.txt
         this.ttl            = config.ttl
         this.subtypes       = config.subtypes
         this.disableIPv6    = !!config.disableIPv6
 
-        // Instance names may contain anything except control characters (RFC 6763 section 4.1.1)
-        if (/[\x00-\x1f\x7f]/.test(this.name)) throw new Error(`Service name "${this.name}" must not contain control characters`)
-        validateLabel('Service name', this.name)
         for (const subtype of this.subtypes || []) validateLabel('Subtype', `_${subtype}`)
         for (const label of this.host.split('.')) validateLabel('Host label', label)
         if (this.txt) validateTxt(this.txt)
     }
 
+
+    private setName(name: string): void {
+        name = name.split('.').join('-')
+        // Instance names may contain anything except control characters (RFC 6763 section 4.1.1)
+        if (/[\x00-\x1f\x7f]/.test(name)) throw new Error(`Service name "${name}" must not contain control characters`)
+        validateLabel('Service name', name)
+
+        this.name = name
+        this.fqdn = `${name}.${this.type}${TLD}`
+    }
+
+    /**
+     * Move to the next name after this one was found in use: `Name` becomes `Name (2)`, then `Name (3)`
+     * (RFC 6763 appendix D)
+     * @internal
+     */
+    public renameAfterConflict(): void {
+        const match = /^(.*) \((\d+)\)$/.exec(this.name)
+        let base = match ? match[1] : this.name
+        const suffix = ` (${match ? Number(match[2]) + 1 : 2})`
+        // Shorten the name to keep it within a DNS label, without splitting a character
+        while (base.length > 0 && Buffer.byteLength(base + suffix) > 63) base = Array.from(base).slice(0, -1).join('')
+        this.setName(base + suffix)
+    }
 
     public records(): Array<ServiceRecord> {
         var records : Array<ServiceRecord>  = [this.RecordPTR(this), this.RecordSRV(this), this.RecordTXT(this)]
