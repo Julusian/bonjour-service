@@ -86,6 +86,22 @@ tape('a repeat query within 1s is deferred until 1s after the last reply', funct
   t.end()
 })
 
+tape('a probe is answered straight away, even just after the records were sent, but at most once per 250ms', function (t) {
+  const { server, sent, tick } = setup()
+  const probe = () => server.mdns.emit('query', { questions: [{ name: FQDN, type: 'ANY' }], authorities: [{ name: FQDN, type: 'SRV', data: {} }] }, {})
+  server.markMulticast(records())
+  tick(300)
+  probe()
+  t.equal(sent.length, 1, 'answered straight away, rather than 1s after the records were sent')
+  tick(100)
+  probe()
+  t.equal(sent.length, 1, 'not again within 250ms')
+  tick(900)
+  t.equal(sent.length, 2, 'held one sent once allowed')
+  server.destroy()
+  t.end()
+})
+
 tape('a continuous stream of queries gets at most one reply per second', function (t) {
   const { server, sent, tick, query } = setup()
   const sentAt = []

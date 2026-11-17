@@ -11,6 +11,11 @@ import { RemoteInfo }                       from 'dgram'
 const MULTICAST_INTERVAL_MS : number = 1000
 
 /**
+ * Minimum interval between multicasts of the same record when answering probes (RFC 6762 section 6)
+ */
+const PROBE_REPLY_INTERVAL_MS : number = 250
+
+/**
  * Maximum TTL in replies to legacy unicast queries (RFC 6762 section 6.7)
  */
 const LEGACY_UNICAST_TTL    : number = 10
@@ -176,6 +181,14 @@ export class Server {
 
         if (rinfo && typeof rinfo.port === 'number' && rinfo.port !== this.port) {
             this.sendLegacyReply(query, answers, rinfo)
+            return
+        }
+
+        // Answering a probe defends the name, so must reach the prober before it finishes probing. That is allowed
+        // once per 250ms rather than once a second (RFC 6762 section 6)
+        const isProbe = Array.isArray(query.authorities) && query.authorities.length > 0
+        if (isProbe && !answers.some((record) => this.multicastAllowedAt(record) - MULTICAST_INTERVAL_MS + PROBE_REPLY_INTERVAL_MS > now)) {
+            this.sendReply(answers)
             return
         }
 
