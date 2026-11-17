@@ -19,6 +19,14 @@ module.exports = function (opts) {
   let interval = null
   let binding = true
 
+  // Without an explicit interface, multicast goes out of every interface in turn. Leaving the choice to the OS
+  // sends it out of just one, which on a host with several (eg Windows with Hyper-V switches) may not be the LAN
+  const sendOnEachInterface = type === 'udp4' && opts.multicast !== false && !opts.interface
+  const multicastQueue = []
+  // The interfaces multicast goes out of, found along with the ones to join the group on
+  let sendInterfaces = []
+  let multicastSending = false
+
   if (type === 'udp6' && (!ip || !opts.interface)) {
     throw new Error('For IPv6 multicast you must specify `ip` and `interface`')
   }
@@ -90,8 +98,70 @@ module.exports = function (opts) {
       if (destroyed) return cb()
       if (err) return cb(err)
       const message = packet.encode(value)
-      socket.send(message, 0, message.length, rinfo.port, rinfo.address || rinfo.host, cb)
+      const address = rinfo.address || rinfo.host
+      if (sendOnEachInterface && address === me.address && rinfo.port === me.port) {
+        multicastQueue.push({ message, cb })
+        if (!multicastSending) sendNextMulticast()
+      } else {
+        socket.send(message, 0, message.length, rinfo.port, address, cb)
+      }
     }
+  }
+
+  // Sends are made one at a time, as the multicast interface applies to the whole socket
+  function sendNextMulticast () {
+    const next = multicastQueue.shift()
+    if (!next) {
+      multicastSending = false
+      return
+    }
+    multicastSending = true
+
+    const ifaces = sendInterfaces
+    if (ifaces.length === 0) {
+      // Nothing to choose between, so let the OS pick
+      socket.send(next.message, 0, next.message.length, me.port, me.address, function (err) {
+        next.cb(err)
+        sendNextMulticast()
+      })
+      return
+    }
+
+    let sent = 0
+    let lastError = null
+    const sendOn = function (i) {
+      if (destroyed) {
+        next.cb()
+        while (multicastQueue.length) multicastQueue.shift().cb()
+        multicastSending = false
+        return
+      }
+      if (i >= ifaces.length) {
+        // Only a failure when it went out of no interface at all
+        next.cb(sent > 0 ? null : lastError)
+        sendNextMulticast()
+        return
+      }
+
+      try {
+        socket.setMulticastInterface(ifaces[i])
+      } catch (err) {
+        that.emit('warning', err)
+        lastError = err
+        sendOn(i + 1)
+        return
+      }
+      socket.send(next.message, 0, next.message.length, me.port, me.address, function (err) {
+        if (err) {
+          that.emit('warning', err)
+          lastError = err
+        } else {
+          sent++
+        }
+        sendOn(i + 1)
+      })
+    }
+    sendOn(0)
   }
 
   that.response =
@@ -138,7 +208,14 @@ module.exports = function (opts) {
   let failedUpdateCount = 0
   that.update = function () {
     try {
-      const ifaces = opts.interface ? [].concat(opts.interface) : allInterfaces()
+      let ifaces
+      if (opts.interface) {
+        ifaces = [].concat(opts.interface)
+      } else {
+        const found = allInterfaces()
+        ifaces = found.map((iface) => iface.address)
+        if (sendOnEachInterface) sendInterfaces = found.filter((iface) => !iface.internal).map((iface) => iface.address)
+      }
       let updated = false
 
       for (let i = 0; i < ifaces.length; i++) {
@@ -155,7 +232,7 @@ module.exports = function (opts) {
       }
 
       if (updated) {
-        if (socket.setMulticastInterface) {
+        if (socket.setMulticastInterface && !sendOnEachInterface) {
           try {
             socket.setMulticastInterface(opts.interface || defaultInterface())
           } catch (err) {
@@ -210,7 +287,7 @@ function allInterfaces () {
     for (let j = 0; j < net.length; j++) {
       const iface = net[j]
       if (isIPv4(iface.family)) {
-        res.push(iface.address)
+        res.push(iface)
         // could only addMembership once per interface (https://nodejs.org/api/dgram.html#dgram_socket_addmembership_multicastaddress_multicastinterface)
         break
       }

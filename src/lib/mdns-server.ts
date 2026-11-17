@@ -33,6 +33,8 @@ export class Server {
     private port            : number
     private registry        : KeyValue = {}
     private errorCallback   : Function
+    // Failing to send a packet isn't fatal, so is only reported to a callback given by the user
+    private sendErrorCallback : Function | null
     // When each record (by name, type and data) was last multicast, for rate limiting replies
     private lastMulticast   : Map<string, MulticastEntry> = new Map()
 
@@ -55,6 +57,7 @@ export class Server {
 
     constructor(opts: Partial<ServiceConfig>, errorCallback?: Function | undefined) {
         this.errorCallback = errorCallback ?? function(err: any) { throw err }
+        this.sendErrorCallback = errorCallback ?? null
         const port = (opts as any).port
         this.port = typeof port === 'number' ? port : 5353
         this.mdns = MulticastDNS(opts as any)
@@ -222,11 +225,7 @@ export class Server {
 
         this.markMulticast(answers)
 
-        this.mdns.respond({ answers: answers, additionals: additionals }, (err: any) => {
-          if (err) {
-              this.errorCallback(err);
-          }
-        })
+        this.mdns.respond({ answers: answers, additionals: additionals }, (err: any) => this.reportSendError(err))
     }
 
     /**
@@ -247,11 +246,15 @@ export class Server {
             questions   : query.questions,
             answers     : answers.map(legacy),
             additionals : this.additionalsFor(answers).map(legacy)
-        }, { address: rinfo.address, port: rinfo.port }, (err: any) => {
-          if (err) {
-              this.errorCallback(err);
-          }
-        })
+        }, { address: rinfo.address, port: rinfo.port }, (err: any) => this.reportSendError(err))
+    }
+
+    /**
+     * Report a failure to send a packet, if the user gave an error callback
+     * @internal
+     */
+    public reportSendError(err: any): void {
+        if (err && this.sendErrorCallback) this.sendErrorCallback(err)
     }
 
     private additionalsFor(answers: Array<ServiceRecord>): Array<ServiceRecord> {

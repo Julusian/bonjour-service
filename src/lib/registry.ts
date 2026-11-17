@@ -156,9 +156,9 @@ export class Registry {
             if (!service.activated || service.destroyed) return
 
             server.markMulticast(packet)
-            server.mdns.respond(packet, function () {
-                // This function will optionally be called with an error object. We'll
-                // just silently ignore it and retry as we normally would
+            server.mdns.respond(packet, function (err: any) {
+                // Carry on regardless, as the next announcement may get through
+                server.reportSendError(err)
                 if (!service.published) {
                     service.activated = true
                     service.published = true

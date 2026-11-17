@@ -57,7 +57,11 @@ documentation](https://github.com/mafintosh/multicast-dns#mdns--multicastdnsopti
 `errorCallback` is an optional callback used to gracefully handle errors that would otherwise
 crash the process. This includes fatal errors from the underlying socket, such as it failing
 to bind (`EADDRINUSE`/`EACCES`). While not being strictly required, providing this is highly
-recommended
+recommended. Packets which could not be sent (out of any interface) are also passed to it; without
+it, those are ignored.
+
+Unless an `interface` is given, multicast packets are sent out of each network interface in turn,
+rather than only the one the OS picks.
 
 ### Publishing
 
