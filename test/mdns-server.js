@@ -299,6 +299,39 @@ tape('records the same as the ones proposed are not a conflict', function (t) {
   })
 })
 
+tape('a service stopped while probing sends nothing, and the probe stops', function (t) {
+  const { server, sent } = setup()
+  const registry = new Registry(server)
+  server.mdns.query = (query, done) => done()
+  const listeners = server.mdns.listenerCount('response')
+  const service = registry.publish({ name: 'baz', type: 'http', port: 3001, host: HOST })
+  service.on('up', () => t.fail('announced'))
+  service.stop()
+  setTimeout(function () {
+    t.deepEqual(sent, [], 'no announcements, nor goodbyes for a name that may be another host\'s')
+    t.equal(server.mdns.listenerCount('response'), listeners, 'probe stopped listening')
+    t.end()
+  }, 1200)
+})
+
+tape('a service stopped and started again while probing is announced once', function (t) {
+  const { server, sent } = setup()
+  const registry = new Registry(server)
+  server.mdns.query = (query, done) => done()
+  const service = registry.publish({ name: 'baz', type: 'http', port: 3001, host: HOST })
+  const keepAlive = setTimeout(() => {}, 10000) // probe timers are unref'd
+  service.stop()
+  service.start({ probe: true })
+  service.on('up', function () {
+    setTimeout(function () {
+      clearTimeout(keepAlive)
+      t.equal(sent.length, 1, 'one announcement, from the second probe only')
+      service.destroyed = true
+      t.end()
+    }, 300)
+  })
+})
+
 tape('unpublishing a service leaves other services of the same type answering', function (t) {
   const { server, sent, tick, query } = setup()
   const registry = new Registry(server)

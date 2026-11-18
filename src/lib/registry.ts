@@ -15,6 +15,10 @@ export class Registry {
 
     private server      : Server
     private services    : Array<Service> = []
+    // The probe each service is waiting on. One left over from before a stop() (and maybe a start() again) is ignored
+    private probes      : WeakMap<Service, object> = new WeakMap()
+    // Services whose records have been announced, so need goodbyes when stopped
+    private announced   : WeakSet<Service> = new WeakSet()
 
     constructor(server: Server) {
         this.server = server
@@ -91,10 +95,14 @@ export class Registry {
         var sent    : boolean   = false
         var retries : number    = 0
         var timer   : any
-    
+
+        const token = {}
+        this.probes.set(service, token)
+        const abandoned = () => !service.activated || service.destroyed || this.probes.get(service) !== token
+
         const send = () => {
             // abort if the service have or is being stopped in the meantime
-            if (!service.activated || service.destroyed) return
+            if (abandoned()) return done(false)
         
             // Include the records we propose to use in the Authority Section, so that a host probing
             // for the same name at the same time can tell which of us should back off (RFC 6762 section 8.2)
@@ -114,7 +122,7 @@ export class Registry {
             // discussion of stale probe packets in RFC 6762 Section 8.2,
             // "Simultaneous Probe Tiebreaking" at
             // https://tools.ietf.org/html/rfc6762#section-8.2
-            if (!sent) return
+            if (!sent || abandoned()) return
             if (packet.answers.some(matchRR) || packet.additionals.some(matchRR)) done(true)
         }
         
@@ -128,6 +136,8 @@ export class Registry {
         const done = (exists: boolean) => {
             mdns.removeListener('response', onresponse)
             clearTimeout(timer)
+            if (abandoned()) return
+            this.probes.delete(service)
             callback(!!exists)
         }
 
@@ -151,6 +161,7 @@ export class Registry {
     
         // Register the records
         server.register(packet)
+        this.announced.add(service)
 
         const broadcast = () => {
             if (!service.activated || service.destroyed) return
@@ -193,8 +204,12 @@ export class Registry {
     
         services = services.filter((service: Service) =>  service.activated) // ignore services not currently starting or started
     
-        var records: any = services.flatMap(function (service) {
+        // Only services that were announced get goodbyes. One stopped while probing has sent nothing for its name,
+        // which may well belong to another host
+        var records: any = services.flatMap((service) => {
             service.activated = false
+            if (!this.announced.has(service)) return []
+            this.announced.delete(service)
             var records = service.records()
             records.forEach((record: ServiceRecord) => {
                 record.ttl = 0 // prepare goodbye message
