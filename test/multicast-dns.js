@@ -126,6 +126,29 @@ tape('without an interface other than loopback, the OS picks', function (t) {
   })
 })
 
+tape('destroying while packets are queued drops them, rather than sending on the closed socket', function (t) {
+  withInterfaces({ lo: [v4('127.0.0.1', true)] }, (restore) => {
+    const socket = new FakeSocket()
+    const send = socket.send
+    socket.send = function () {
+      if (socket.closed) throw new Error('Not running')
+      return send.apply(socket, arguments)
+    }
+    socket.close = (cb) => { socket.closed = true; if (cb) cb() }
+    const dns = mdns({ socket })
+    const done = []
+    const finish = () => {
+      if (done.length < 2) return
+      restore()
+      t.equal(socket.sends.length, 1, 'only the first was sent')
+      t.end()
+    }
+    dns.query('a.local', 'A', () => { done.push('a'); finish() })
+    dns.query('b.local', 'A', () => { done.push('b'); finish() })
+    socket.once('listening', () => setImmediate(() => dns.destroy()))
+  })
+})
+
 tape('an explicit interface, unicast, and multicast: false are sent once', function (t) {
   withInterfaces(HYPER_V, (restore) => {
     const explicit = new FakeSocket()

@@ -110,6 +110,13 @@ module.exports = function (opts) {
 
   // Sends are made one at a time, as the multicast interface applies to the whole socket
   function sendNextMulticast () {
+    if (destroyed) {
+      // The socket is closed, so anything still queued can't be sent
+      while (multicastQueue.length) multicastQueue.shift().cb()
+      multicastSending = false
+      return
+    }
+
     const next = multicastQueue.shift()
     if (!next) {
       multicastSending = false
@@ -132,8 +139,7 @@ module.exports = function (opts) {
     const sendOn = function (i) {
       if (destroyed) {
         next.cb()
-        while (multicastQueue.length) multicastQueue.shift().cb()
-        multicastSending = false
+        sendNextMulticast()
         return
       }
       if (i >= ifaces.length) {
