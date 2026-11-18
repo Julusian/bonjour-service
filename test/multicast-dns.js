@@ -198,3 +198,32 @@ tape('a failed announcement is passed to the error callback, and ignored without
     })
   })
 })
+
+tape('copies of a packet received within 100ms are dropped, except from legacy unicast queriers', function (t) {
+  const packet = require('dns-packet')
+  const realNow = Date.now
+  let now = 1000000
+  Date.now = () => now
+  const socket = new FakeSocket()
+  const dns = mdns({ socket, interface: '192.168.20.100' })
+  const queries = []
+  dns.on('query', (query, rinfo) => queries.push(rinfo.address + ':' + rinfo.port))
+  const message = packet.encode({ type: 'query', questions: [{ name: 'a.local', type: 'A' }] })
+
+  // looped back once per interface it went out of
+  socket.emit('message', message, { address: '192.168.20.100', port: 5353 })
+  socket.emit('message', message, { address: '172.31.16.1', port: 5353 })
+  t.deepEqual(queries, ['192.168.20.100:5353'], 'copy dropped')
+
+  now += 1000
+  socket.emit('message', message, { address: '192.168.20.50', port: 5353 })
+  t.equal(queries.length, 2, 'sent again later is kept')
+
+  socket.emit('message', message, { address: '192.168.20.60', port: 40000 })
+  socket.emit('message', message, { address: '192.168.20.60', port: 40000 })
+  t.equal(queries.length, 4, 'legacy unicast queries are all kept')
+
+  Date.now = realNow
+  dns.destroy()
+  t.end()
+})

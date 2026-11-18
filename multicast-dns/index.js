@@ -6,6 +6,9 @@ const os = require('os')
 
 const noop = function () {}
 
+// How long after receiving a packet an identical one counts as a copy of it, rather than sent again
+const DUPLICATE_WINDOW_MS = 100
+
 module.exports = function (opts) {
   if (!opts) opts = {}
 
@@ -47,7 +50,31 @@ module.exports = function (opts) {
     else that.emit('warning', err)
   })
 
+  // When each recent mDNS packet (by its bytes) was received, to drop copies of it
+  const recentPackets = new Map()
+
+  // A copy of a packet that was just received is dropped. Multicast sent out of several interfaces is looped back
+  // once for each of them, and a host with more than one interface on the network is heard on each. Answering every
+  // copy would reply again once the 1s rate limit allows (RFC 6762 section 6). Legacy unicast queries, from a port
+  // other than ours, each need their own reply so are always kept
+  function isDuplicate (message, rinfo) {
+    if (rinfo.port !== me.port) return false
+
+    const now = Date.now()
+    for (const [key, at] of recentPackets) {
+      if (now - at < DUPLICATE_WINDOW_MS) break
+      recentPackets.delete(key)
+    }
+
+    const key = message.toString('base64')
+    if (recentPackets.has(key)) return true
+    recentPackets.set(key, now)
+    return false
+  }
+
   socket.on('message', function (message, rinfo) {
+    if (isDuplicate(message, rinfo)) return
+
     try {
       message = packet.decode(message)
     } catch (err) {
@@ -62,6 +89,8 @@ module.exports = function (opts) {
   })
 
   socket.on('listening', function () {
+    // Destroyed before the bind finished, so there is nothing to keep updating
+    if (destroyed) return
     if (!port) port = me.port = socket.address().port
     if (opts.multicast !== false) {
       that.update()
